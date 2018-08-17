@@ -56,6 +56,7 @@ import org.scijava.util.StringUtils;
  */
 public final class SharedTable {
 
+	/** Empty cells are null */
 	public static final Double EMPTY_CELL = null;
 
 	/**
