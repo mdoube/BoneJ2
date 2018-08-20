@@ -30,8 +30,8 @@ import static org.junit.Assert.assertTrue;
 
 import java.util.Objects;
 
-import net.imagej.table.DefaultColumn;
-import net.imagej.table.Table;
+import org.scijava.table.DefaultColumn;
+import org.scijava.table.Table;
 
 import org.junit.After;
 import org.junit.Test;

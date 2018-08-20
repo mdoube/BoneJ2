@@ -37,8 +37,6 @@ import java.util.Map;
 import java.util.Optional;
 
 import net.imagej.patcher.LegacyInjector;
-import net.imagej.table.DefaultColumn;
-import net.imagej.table.Table;
 
 import org.bonej.utilities.ImagePlusUtil;
 import org.bonej.utilities.RoiManagerUtil;
@@ -51,6 +49,8 @@ import org.scijava.command.Command;
 import org.scijava.command.ContextCommand;
 import org.scijava.plugin.Parameter;
 import org.scijava.plugin.Plugin;
+import org.scijava.table.DefaultColumn;
+import org.scijava.table.Table;
 import org.scijava.ui.UIService;
 import org.scijava.widget.ChoiceWidget;
 

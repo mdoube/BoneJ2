@@ -39,8 +39,6 @@ import net.imagej.ops.Ops.Geometric.MarchingCubes;
 import net.imagej.ops.Ops.Geometric.Size;
 import net.imagej.ops.special.function.Functions;
 import net.imagej.ops.special.function.UnaryFunctionOp;
-import net.imagej.table.DefaultColumn;
-import net.imagej.table.Table;
 import net.imagej.units.UnitService;
 import net.imglib2.IterableInterval;
 import net.imglib2.RandomAccessibleInterval;
@@ -63,6 +61,8 @@ import org.scijava.command.Command;
 import org.scijava.command.ContextCommand;
 import org.scijava.plugin.Parameter;
 import org.scijava.plugin.Plugin;
+import org.scijava.table.DefaultColumn;
+import org.scijava.table.Table;
 import org.scijava.ui.UIService;
 
 /**

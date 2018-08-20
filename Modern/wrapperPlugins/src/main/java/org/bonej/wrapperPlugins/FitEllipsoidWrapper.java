@@ -34,8 +34,6 @@ import java.util.stream.Collectors;
 
 import net.imagej.ops.OpService;
 import net.imagej.patcher.LegacyInjector;
-import net.imagej.table.DefaultColumn;
-import net.imagej.table.Table;
 
 import org.bonej.ops.SolveQuadricEq;
 import org.bonej.ops.ellipsoid.Ellipsoid;
@@ -51,6 +49,8 @@ import org.scijava.command.Command;
 import org.scijava.command.ContextCommand;
 import org.scijava.plugin.Parameter;
 import org.scijava.plugin.Plugin;
+import org.scijava.table.DefaultColumn;
+import org.scijava.table.Table;
 import org.scijava.ui.UIService;
 import org.scijava.vecmath.Matrix4d;
 import org.scijava.vecmath.Vector3d;

@@ -29,8 +29,6 @@ import static org.bonej.wrapperPlugins.CommonMessages.WEIRD_SPATIAL;
 
 import net.imagej.ImgPlus;
 import net.imagej.ops.OpService;
-import net.imagej.table.DefaultColumn;
-import net.imagej.table.Table;
 import net.imagej.units.UnitService;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.logic.BitType;
@@ -47,6 +45,8 @@ import org.scijava.command.Command;
 import org.scijava.command.ContextCommand;
 import org.scijava.plugin.Parameter;
 import org.scijava.plugin.Plugin;
+import org.scijava.table.DefaultColumn;
+import org.scijava.table.Table;
 import org.scijava.ui.UIService;
 
 /**

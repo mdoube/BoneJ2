@@ -31,10 +31,10 @@ import net.imagej.axis.AxisType;
 import net.imagej.axis.CalibratedAxis;
 import net.imagej.axis.TypedAxis;
 import net.imagej.space.AnnotatedSpace;
-import net.imagej.table.GenericColumn;
 import net.imagej.units.UnitService;
 
 import org.bonej.utilities.AxisUtils;
+import org.scijava.table.GenericColumn;
 import org.scijava.util.StringUtils;
 
 import ij.ImagePlus;

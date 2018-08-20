@@ -40,11 +40,7 @@ import java.util.stream.DoubleStream;
 
 import net.imagej.ops.OpService;
 import net.imagej.patcher.LegacyInjector;
-import net.imagej.table.DefaultColumn;
-import net.imagej.table.DefaultResultsTable;
-import net.imagej.table.DoubleColumn;
-import net.imagej.table.ResultsTable;
-import net.imagej.table.Table;
+
 import net.imglib2.util.ValuePair;
 
 import org.bonej.utilities.ImagePlusUtil;
@@ -60,6 +56,10 @@ import org.scijava.command.ContextCommand;
 import org.scijava.plugin.Parameter;
 import org.scijava.plugin.Plugin;
 import org.scijava.prefs.PrefService;
+import org.scijava.table.DefaultColumn;
+import org.scijava.table.DefaultDoubleTable;
+import org.scijava.table.DoubleColumn;
+import org.scijava.table.Table;
 import org.scijava.ui.UIService;
 import org.scijava.widget.NumberWidget;
 
@@ -161,10 +161,10 @@ public class IntertrabecularAngleWrapper extends ContextCommand {
 	 * results
 	 */
 	@Parameter(type = ItemIO.OUTPUT, label = "Edge endpoints")
-	private ResultsTable centroidTable;
+	private DefaultDoubleTable centroidTable;
 
 	@Parameter(type = ItemIO.OUTPUT, label = "Edge culling percentages")
-	private ResultsTable culledEdgePercentagesTable;
+	private DefaultDoubleTable culledEdgePercentagesTable;
 
 	@SuppressWarnings("unused")
 	@Parameter
@@ -346,7 +346,7 @@ public class IntertrabecularAngleWrapper extends ContextCommand {
 		shortCol.add(stats[3]);
 		deadEndCol.add(stats[1]);
 
-		culledEdgePercentagesTable = new DefaultResultsTable();
+		culledEdgePercentagesTable = new DefaultDoubleTable();
 		culledEdgePercentagesTable.add(loopCol);
 		culledEdgePercentagesTable.add(repeatedCol);
 		culledEdgePercentagesTable.add(shortCol);
@@ -377,7 +377,7 @@ public class IntertrabecularAngleWrapper extends ContextCommand {
 			columns.get(4).add(v2centroid.y);
 			columns.get(5).add(v2centroid.z);
 		}
-		centroidTable = new DefaultResultsTable();
+		centroidTable = new DefaultDoubleTable();
 		centroidTable.addAll(columns);
 	}
 

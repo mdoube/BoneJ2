@@ -40,7 +40,6 @@ import net.imagej.axis.Axis;
 import net.imagej.axis.AxisType;
 import net.imagej.axis.CalibratedAxis;
 import net.imagej.axis.DefaultLinearAxis;
-import net.imagej.table.GenericColumn;
 import net.imagej.units.UnitService;
 import net.imglib2.img.Img;
 import net.imglib2.img.array.ArrayImgs;
@@ -49,6 +48,7 @@ import net.imglib2.type.numeric.real.DoubleType;
 import org.junit.AfterClass;
 import org.junit.Test;
 import org.scijava.Contextual;
+import org.scijava.table.GenericColumn;
 
 import ij.ImagePlus;
 import ij.measure.Calibration;
