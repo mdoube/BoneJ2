@@ -78,7 +78,7 @@ import org.scijava.log.LogService;
 import org.scijava.plugin.Parameter;
 import org.scijava.plugin.Plugin;
 import org.scijava.table.Table;
-import org.scijava.table.DefaultColumn;
+import org.scijava.table.DoubleColumn;
 import org.scijava.ui.DialogPrompt.Result;
 import org.scijava.ui.UIService;
 import org.scijava.vecmath.AxisAngle4d;
@@ -148,7 +148,7 @@ public class AnisotropyWrapper<T extends RealType<T> & NativeType<T>> extends
 	 * </p>
 	 */
 	@Parameter(type = ItemIO.OUTPUT, label = "BoneJ results")
-	private Table<DefaultColumn<Double>, Double> resultsTable;
+	private Table<DoubleColumn, Double> resultsTable;
 	@Parameter
 	private LogService logService;
 	@Parameter

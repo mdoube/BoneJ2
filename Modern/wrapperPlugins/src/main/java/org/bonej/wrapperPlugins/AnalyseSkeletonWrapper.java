@@ -56,7 +56,6 @@ import org.scijava.io.IOService;
 import org.scijava.log.LogService;
 import org.scijava.plugin.Parameter;
 import org.scijava.plugin.Plugin;
-import org.scijava.table.DefaultColumn;
 import org.scijava.table.DefaultGenericTable;
 import org.scijava.table.DoubleColumn;
 import org.scijava.table.IntColumn;
@@ -127,7 +126,7 @@ public class AnalyseSkeletonWrapper extends ContextCommand {
 	 * results.
 	 */
 	@Parameter(type = ItemIO.OUTPUT, label = "BoneJ results")
-	private Table<DefaultColumn<Double>,Double> resultsTable;
+	private Table<DoubleColumn,Double> resultsTable;
 
 	/**
 	 * Additional analysis details in a {@link DefaultGenericTable}, null if

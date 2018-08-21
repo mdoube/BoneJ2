@@ -64,7 +64,6 @@ import org.scijava.command.Command;
 import org.scijava.command.ContextCommand;
 import org.scijava.plugin.Parameter;
 import org.scijava.plugin.Plugin;
-import org.scijava.table.DefaultColumn;
 import org.scijava.table.DefaultGenericTable;
 import org.scijava.table.DoubleColumn;
 import org.scijava.table.GenericColumn;
@@ -141,7 +140,7 @@ public class FractalDimensionWrapper<T extends RealType<T> & NativeType<T>>
 	 * </p>
 	 */
 	@Parameter(type = ItemIO.OUTPUT, label = "BoneJ results")
-	private Table<DefaultColumn<Double>, Double> resultsTable;
+	private Table<DoubleColumn,Double> resultsTable;
 
 	/**
 	 * Tables containing the (-log(size), log(count)) points for each 3D subspace

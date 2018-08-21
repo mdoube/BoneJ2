@@ -27,8 +27,8 @@ import java.util.Collection;
 import java.util.Objects;
 import java.util.stream.IntStream;
 
-import org.scijava.table.DefaultColumn;
 import org.scijava.table.DefaultGenericTable;
+import org.scijava.table.DoubleColumn;
 import org.scijava.table.Table;
 import org.scijava.util.StringUtils;
 
@@ -61,7 +61,7 @@ public final class SharedTable {
 	/**
 	 * The table uses Double values. Empty cells are indicated by null
 	 */
-	private static Table<DefaultColumn<Double>, Double> table = createTable();
+	private static Table<DoubleColumn, Double> table = createTable();
 
 	private SharedTable() {}
 
@@ -125,7 +125,7 @@ public final class SharedTable {
 	 *
 	 * @return the singleton table.
 	 */
-	public static Table<DefaultColumn<Double>, Double> getTable() {
+	public static Table<DoubleColumn, Double> getTable() {
 		return table;
 	}
 
@@ -153,13 +153,13 @@ public final class SharedTable {
 	}
 
 	@SuppressWarnings("unchecked")
-	private static Table<DefaultColumn<Double>, Double> createTable() {
+	private static Table<DoubleColumn, Double> createTable() {
 		final Table newTable = new DefaultGenericTable();
 		return newTable;
 	}
 
 	private static void fillEmptyColumn(final int columnIndex) {
-		final DefaultColumn<Double> column = table.get(columnIndex);
+		final DoubleColumn column = table.get(columnIndex);
 		IntStream.range(0, column.size()).forEach(i -> column.set(i, EMPTY_CELL));
 	}
 
