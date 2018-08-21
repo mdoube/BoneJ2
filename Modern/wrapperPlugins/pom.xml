@@ -202,6 +202,7 @@
         <dependency>
             <groupId>org.scijava</groupId>
             <artifactId>scijava-table</artifactId>
+            <version>0.2.1-SNAPSHOT</version>
         </dependency>
 
         <!-- Other dependencies -->
