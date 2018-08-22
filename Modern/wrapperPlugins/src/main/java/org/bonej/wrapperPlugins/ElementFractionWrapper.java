@@ -45,7 +45,7 @@ import org.scijava.command.Command;
 import org.scijava.command.ContextCommand;
 import org.scijava.plugin.Parameter;
 import org.scijava.plugin.Plugin;
-import org.scijava.table.DoubleColumn;
+import org.scijava.table.DefaultColumn;
 import org.scijava.table.Table;
 import org.scijava.ui.UIService;
 
@@ -74,7 +74,7 @@ public class ElementFractionWrapper<T extends RealType<T> & NativeType<T>>
 	 * </p>
 	 */
 	@Parameter(type = ItemIO.OUTPUT, label = "BoneJ results")
-	private Table<DoubleColumn, Double> resultsTable;
+	private Table<DefaultColumn<Double>, Double> resultsTable;
 
 	@Parameter
 	private OpService opService;

@@ -56,6 +56,7 @@ import org.scijava.command.ContextCommand;
 import org.scijava.plugin.Parameter;
 import org.scijava.plugin.Plugin;
 import org.scijava.prefs.PrefService;
+import org.scijava.table.DefaultColumn;
 import org.scijava.table.DefaultDoubleTable;
 import org.scijava.table.DoubleColumn;
 import org.scijava.table.Table;
@@ -153,7 +154,7 @@ public class IntertrabecularAngleWrapper extends ContextCommand {
 
 	/** The ITA angles in a {@link Table}, null if there are no results */
 	@Parameter(type = ItemIO.OUTPUT, label = "BoneJ results")
-	private Table<DoubleColumn,Double> anglesTable;
+	private Table<DefaultColumn<Double>, Double> anglesTable;
 
 	/**
 	 * The ITA edge-end coordinates in a {@link Table}, null if there are no
