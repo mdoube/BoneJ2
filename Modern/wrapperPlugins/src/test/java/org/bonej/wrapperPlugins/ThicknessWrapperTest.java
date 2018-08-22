@@ -36,7 +36,6 @@ import static org.mockito.Mockito.verify;
 import java.util.List;
 
 import net.imagej.ImageJ;
-import net.imagej.table.DefaultColumn;
 
 import org.bonej.utilities.SharedTable;
 import org.junit.After;
@@ -45,6 +44,7 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.scijava.Gateway;
 import org.scijava.command.CommandModule;
+import org.scijava.table.DefaultColumn;
 import org.scijava.ui.UserInterface;
 
 import ij.IJ;

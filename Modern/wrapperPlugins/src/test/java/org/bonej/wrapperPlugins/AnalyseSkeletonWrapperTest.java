@@ -44,9 +44,6 @@ import java.util.Collection;
 import java.util.List;
 
 import net.imagej.ImageJ;
-import net.imagej.table.DefaultColumn;
-import net.imagej.table.DefaultGenericTable;
-import net.imagej.table.PrimitiveColumn;
 
 import org.bonej.utilities.SharedTable;
 import org.junit.After;
@@ -54,6 +51,9 @@ import org.junit.AfterClass;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.scijava.command.CommandModule;
+import org.scijava.table.DefaultColumn;
+import org.scijava.table.DefaultGenericTable;
+import org.scijava.table.PrimitiveColumn;
 import org.scijava.ui.UserInterface;
 
 import ij.IJ;

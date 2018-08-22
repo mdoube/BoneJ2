@@ -49,8 +49,6 @@ import java.util.function.Predicate;
 import java.util.stream.Stream;
 
 import net.imagej.ImageJ;
-import net.imagej.table.DefaultColumn;
-import net.imagej.table.DefaultResultsTable;
 
 import org.bonej.utilities.SharedTable;
 import org.junit.After;
@@ -59,6 +57,8 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.scijava.Gateway;
 import org.scijava.command.CommandModule;
+import org.scijava.table.DefaultColumn;
+import org.scijava.table.DefaultDoubleTable;
 import org.scijava.ui.UserInterface;
 import org.scijava.ui.swing.sdi.SwingDialogPrompt;
 
@@ -287,7 +287,7 @@ public class IntertrabecularAngleWrapperTest {
 			IntertrabecularAngleWrapper.class, true, "inputImage", line,
 			"minimumTrabecularLength", 0, "printCentroids", true).get();
 
-		final DefaultResultsTable centroids = (DefaultResultsTable) module
+		final DefaultDoubleTable centroids = (DefaultDoubleTable) module
 			.getOutput("centroidTable");
 		// VERIFY
 
