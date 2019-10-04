@@ -35,12 +35,14 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.ListIterator;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.bonej.geometry.Ellipsoid;
 import org.bonej.geometry.FitEllipsoid;
 import org.bonej.menuWrappers.LocalThickness;
 import org.bonej.util.DialogModifier;
 import org.bonej.util.ImageCheck;
+import org.bonej.util.Multithreader;
 import org.scijava.vecmath.Color3f;
 import org.scijava.vecmath.Point3f;
 
@@ -461,23 +463,40 @@ public class ParticleCounter implements PlugIn, DialogListener {
 		Arrays.stream(nbh).filter(n -> n > 0).forEach(set::add);
 	}
 
+
+	/**
+	 * Apply the LUT in multiple threads
+	 * 
+	 * @param particleLabels
+	 * @param lut
+	 * @param w
+	 * @param h
+	 * @param d
+	 */
 	private static void applyLUT(final int[][] particleLabels, final int[] lut,
 		final int w, final int h, final int d)
 	{
-		for (int z = 0; z < d; z++) {
-			IJ.showStatus("Applying LUT...");
-			IJ.showProgress(z, d - 1);
-			final int[] slice = particleLabels[z];
-			for (int y = 0; y < h; y++) {
-				final int yw = y * w;
-				for (int x = 0; x < w; x++) {
-					final int i = yw + x;
-					final int label = slice[i];
-					if (label == 0) continue;
-					slice[i] = lut[label];
+		final AtomicInteger ai = new AtomicInteger(0);
+		final Thread[] threads = Multithreader.newThreads();
+		for (int thread = 0; thread < threads.length; thread++) {
+			threads[thread] = new Thread(() -> {
+				for (int z = ai.getAndIncrement(); z < d; z = ai.getAndIncrement()) {
+					IJ.showStatus("Applying LUT...");
+					IJ.showProgress(z, d - 1);
+					final int[] slice = particleLabels[z];
+					for (int y = 0; y < h; y++) {
+						final int yw = y * w;
+						for (int x = 0; x < w; x++) {
+							final int i = yw + x;
+							final int label = slice[i];
+							if (label == 0) continue;
+							slice[i] = lut[label];
+						}
+					}
 				}
-			}
+			});
 		}
+		Multithreader.startAndJoin(threads);
 	}
 
 	private static boolean checkConsistence(final int[] lut,
