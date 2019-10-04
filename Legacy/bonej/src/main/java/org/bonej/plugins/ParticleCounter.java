@@ -460,7 +460,15 @@ public class ParticleCounter implements PlugIn, DialogListener {
 		final int[] nbh, final int centre)
 	{
 		final HashSet<Integer> set = map.get(centre);
-		Arrays.stream(nbh).filter(n -> n > 0).forEach(set::add);
+		final int l = nbh.length;
+		for (int i = 0; i < l; i++) {
+			final int val = nbh[i];
+			// skip background and self-similar labels
+			// adding them again is a redundant waste of time
+			if (val == 0 || val == centre)
+				continue;
+			set.add(val);
+		}
 	}
 
 
