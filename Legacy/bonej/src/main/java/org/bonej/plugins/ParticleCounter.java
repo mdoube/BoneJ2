@@ -492,14 +492,11 @@ public class ParticleCounter implements PlugIn, DialogListener {
 					IJ.showStatus("Applying LUT...");
 					IJ.showProgress(z, d - 1);
 					final int[] slice = particleLabels[z];
-					for (int y = 0; y < h; y++) {
-						final int yw = y * w;
-						for (int x = 0; x < w; x++) {
-							final int i = yw + x;
-							final int label = slice[i];
-							if (label == 0) continue;
-							slice[i] = lut[label];
-						}
+					final int l = slice.length;
+					for (int i = 0; i < l; i++) {
+						final int label = slice[i];
+						if (label == 0) continue;
+						slice[i] = lut[label];
 					}
 				}
 			});
