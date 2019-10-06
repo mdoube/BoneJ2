@@ -2454,12 +2454,21 @@ public class ParticleCounter implements PlugIn, DialogListener {
 		final int p = imp.getWidth() * imp.getHeight();
 		final byte[][] workArray = new byte[s][p];
 		final ImageStack stack = imp.getStack();
-		for (int z = 0; z < s; z++) {
-			final ImageProcessor ip = stack.getProcessor(z + 1);
-			for (int i = 0; i < p; i++) {
-				workArray[z][i] = (byte) ip.get(i);
-			}
+
+		AtomicInteger ai = new AtomicInteger(0);
+
+		final Thread[] threads = Multithreader.newThreads();
+		for (int thread = 0; thread < threads.length; thread++) {
+			threads[thread] = new Thread(() -> {
+				for (int z = ai.getAndIncrement(); z < s; z = ai.getAndIncrement()) {
+					final ImageProcessor ip = stack.getProcessor(z + 1);
+					for (int i = 0; i < p; i++) {
+						workArray[z][i] = (byte) ip.get(i);
+					}
+				}
+			});
 		}
+		Multithreader.startAndJoin(threads);
 		return workArray;
 	}
 
