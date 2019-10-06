@@ -1327,7 +1327,7 @@ public class ParticleCounter implements PlugIn, DialogListener {
 	}
 
 	/**
-	 * Go through all pixels and assign initial particle label
+	 * Go through all pixels and assign initial particle label.
 	 *
 	 * @param imp an image.
 	 * @param workArray byte[] array containing pixel values
@@ -1347,6 +1347,7 @@ public class ParticleCounter implements PlugIn, DialogListener {
 		int ID = 1;
 
 		if (phase == FORE) {
+			final int[] nbh = new int[13];
 			for (int z = 0; z < d; z++) {
 				for (int y = 0; y < h; y++) {
 					final int rowIndex = y * w;
@@ -1357,27 +1358,14 @@ public class ParticleCounter implements PlugIn, DialogListener {
 							int minTag = ID;
 							// Find the minimum particleLabel in the
 							// neighbouring pixels
-							final int zp1 = z + 1;
-							final int yp1 = y + 1;
-							final int xp1 = x + 1;
-							final int zm1 = z - 1;
-							final int ym1 = y - 1;
-							final int xm1 = x - 1;
-							for (int vZ = zm1; vZ <= zp1; vZ++) {
-								for (int vY = ym1; vY <= yp1; vY++) {
-									for (int vX = xm1; vX <= xp1; vX++) {
-										if (withinBounds(vX, vY, vZ, w, h, 0, d)) {
-											final int offset = getOffset(vX, vY, w);
-											if (workArray[vZ][offset] == FORE) {
-												final int tagv = particleLabels[vZ][offset];
-												if (tagv != 0 && tagv < minTag) {
-													minTag = tagv;
-												}
-											}
-										}
-									}
-								}
+							get13Neighborhood(nbh, particleLabels, x, y, z, w, h, d);
+							
+							for (int i = 0; i < 13; i++) {
+								final int tagv = nbh[i];
+								if (tagv == 0) continue;
+								if (tagv < minTag) minTag = tagv;
 							}
+							
 							// assign the smallest particle label from the
 							// neighbours to the pixel
 							particleLabels[z][arrayIndex] = minTag;
@@ -1391,7 +1379,9 @@ public class ParticleCounter implements PlugIn, DialogListener {
 				IJ.showProgress(z, d);
 			}
 		}
+		
 		else if (phase == BACK) {
+			final int[] nbh = new int[3];
 			for (int z = 0; z < d; z++) {
 				for (int y = 0; y < h; y++) {
 					final int rowIndex = y * w;
@@ -1402,44 +1392,14 @@ public class ParticleCounter implements PlugIn, DialogListener {
 							int minTag = ID;
 							// Find the minimum particleLabel in the
 							// neighbouring pixels
-							int nX = x;
-							int nY = y;
-							int nZ = z;
-							for (int n = 0; n < 7; n++) {
-								switch (n) {
-									case 0:
-										break;
-									case 1:
-										nX = x - 1;
-										break;
-									case 2:
-										nX = x + 1;
-										break;
-									case 3:
-										nY = y - 1;
-										nX = x;
-										break;
-									case 4:
-										nY = y + 1;
-										break;
-									case 5:
-										nZ = z - 1;
-										nY = y;
-										break;
-									case 6:
-										nZ = z + 1;
-										break;
-								}
-								if (withinBounds(nX, nY, nZ, w, h, 0, d)) {
-									final int offset = getOffset(nX, nY, w);
-									if (workArray[nZ][offset] == BACK) {
-										final int tagv = particleLabels[nZ][offset];
-										if (tagv != 0 && tagv < minTag) {
-											minTag = tagv;
-										}
-									}
-								}
+							get3Neighborhood(nbh, particleLabels, x, y, z, w, h, d);
+							
+							for (int i = 0; i < 3; i++) {
+								final int tagv = nbh[i];
+								if (tagv == 0) continue;
+								if (tagv < minTag) minTag = tagv;
 							}
+							
 							// assign the smallest particle label from the
 							// neighbours to the pixel
 							particleLabels[z][arrayIndex] = minTag;
@@ -1515,6 +1475,50 @@ public class ParticleCounter implements PlugIn, DialogListener {
 		neighborhood[25] = getPixel(image, xp1, yp1, zp1, w, h, d);
 	}
 
+	/**
+	 * Get 13 neighborhood of a pixel in a 3D image (0 border conditions)
+	 * Longhand, hard-coded for speed. This neighbourhood contains the 
+	 * set of pixels that have already been visited by the cursor
+	 * as it raster scans in an x-y-z order.
+	 *
+	 * @param neighborhood a neighbourhood in the image.
+	 * @param image 3D image (int[][])
+	 * @param x x- coordinate
+	 * @param y y- coordinate
+	 * @param z z- coordinate (in image stacks the indexes start at 1)
+	 * @param w width of the image.
+	 * @param h height of the image.
+	 * @param d depth of the image.
+	 */
+	private static void get13Neighborhood(final int[] neighborhood,
+		final int[][] image, final int x, final int y, final int z, final int w,
+		final int h, final int d)
+	{
+		final int xm1 = x - 1;
+		final int xp1 = x + 1;
+		final int ym1 = y - 1;
+		final int yp1 = y + 1;
+		final int zm1 = z - 1;
+
+		neighborhood[0] = getPixel(image, xm1, ym1, zm1, w, h, d);
+		neighborhood[1] = getPixel(image, x, ym1, zm1, w, h, d);
+		neighborhood[2] = getPixel(image, xp1, ym1, zm1, w, h, d);
+		
+		neighborhood[3] = getPixel(image, xm1, y, zm1, w, h, d);
+		neighborhood[4] = getPixel(image, x, y, zm1, w, h, d);
+		neighborhood[5] = getPixel(image, xp1, y, zm1, w, h, d);
+		
+		neighborhood[6] = getPixel(image, xm1, yp1, zm1, w, h, d);
+		neighborhood[7] = getPixel(image, x, yp1, zm1, w, h, d);
+		neighborhood[8] = getPixel(image, xp1, yp1, zm1, w, h, d);
+		
+		neighborhood[9] = getPixel(image, xm1, ym1, z, w, h, d);
+		neighborhood[10] = getPixel(image, x, ym1, z, w, h, d);
+		neighborhood[11] = getPixel(image, xp1, ym1, z, w, h, d);
+		
+		neighborhood[12] = getPixel(image, xm1, y, z, w, h, d);
+	}
+	
 	private static void get6Neighborhood(final int[] neighborhood,
 		final int[][] image, final int x, final int y, final int z, final int w,
 		final int h, final int d)
@@ -1525,6 +1529,15 @@ public class ParticleCounter implements PlugIn, DialogListener {
 		neighborhood[3] = getPixel(image, x + 1, y, z, w, h, d);
 		neighborhood[4] = getPixel(image, x, y + 1, z, w, h, d);
 		neighborhood[5] = getPixel(image, x, y, z + 1, w, h, d);
+	}
+	
+	private static void get3Neighborhood(final int[] neighborhood,
+		final int[][] image, final int x, final int y, final int z, final int w,
+		final int h, final int d)
+	{
+		neighborhood[0] = getPixel(image, x - 1, y, z, w, h, d);
+		neighborhood[1] = getPixel(image, x, y - 1, z, w, h, d);
+		neighborhood[2] = getPixel(image, x, y, z - 1, w, h, d);
 	}
 
 	/**
