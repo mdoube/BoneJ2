@@ -2829,22 +2829,56 @@ public class ParticleCounter implements PlugIn, DialogListener {
 		IJ.showStatus("Getting " + sPhase + " particle sizes");
 		final int d = particleLabels.length;
 		final int wh = particleLabels[0].length;
-		// find the highest value particleLabel
-		int maxParticle = 0;
-		for (final int[] slice : particleLabels) {
-			for (int i = 0; i < wh; i++) {
-				maxParticle = Math.max(maxParticle, slice[i]);
-			}
-		}
 
-		final long[] particleSizes = new long[maxParticle + 1];
-		for (int z = 0; z < d; z++) {
-			final int[] slice = particleLabels[z];
-			for (int i = 0; i < wh; i++) {
-				particleSizes[slice[i]]++;
-			}
-			IJ.showProgress(z, d);
+		// find the highest value particleLabel
+		AtomicInteger ai = new AtomicInteger(0);
+		final int[] maxArray = new int[d];
+		
+		final Thread[] threads = Multithreader.newThreads();
+		for (int thread = 0; thread < threads.length; thread++) {
+			threads[thread] = new Thread(() -> {
+				for (int z = ai.getAndIncrement(); z < d; z = ai.getAndIncrement()) {
+					final int[] slice = particleLabels[z];
+					int maxParticle = 0;
+					for (int i = 0; i < wh; i++) {
+						maxParticle = Math.max(maxParticle, slice[i]);
+					}
+					maxArray[z] = maxParticle;
+				}
+			});
 		}
+		Multithreader.startAndJoin(threads);
+		final int maxParticle = Arrays.stream(maxArray).max().getAsInt();
+		
+		//make a list of all the particle sizes with 
+		//index = particle value
+		AtomicInteger an = new AtomicInteger(0);
+		final long[][] partSizes = new long[d][];
+		
+		final Thread[] threadss = Multithreader.newThreads();
+		for (int thread = 0; thread < threads.length; thread++) {
+			threadss[thread] = new Thread(() -> {
+				for (int z = an.getAndIncrement(); z < d; z = an.getAndIncrement()) {
+					final long[] particleSizes = new long[maxParticle + 1];
+					final int[] slice = particleLabels[z];
+					for (int i = 0; i < wh; i++) {
+						particleSizes[slice[i]]++;
+					}
+					partSizes[z] = particleSizes;
+				}
+			});
+		}
+		Multithreader.startAndJoin(threadss);
+		
+		final long[] particleSizes = new long[maxParticle + 1];
+		for (int i = 0; i <= maxParticle; i++) {
+			long partSum = 0;
+			for (int z = 0; z < d; z++)
+				partSum += partSizes[z][i];
+			particleSizes[i] = partSum;			
+		}
+		
+		IJ.showStatus("Finished calculating particle sizes");
 		return particleSizes;
 	}
 
