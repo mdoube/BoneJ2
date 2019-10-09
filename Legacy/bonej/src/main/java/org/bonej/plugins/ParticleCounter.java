@@ -36,6 +36,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.IntStream;
 
 import org.bonej.geometry.Ellipsoid;
 import org.bonej.geometry.FitEllipsoid;
@@ -2237,41 +2238,68 @@ public class ParticleCounter implements PlugIn, DialogListener {
 		final int w = imp.getWidth();
 		final int h = imp.getHeight();
 		final int d = imp.getImageStackSize();
+		final int[] lut = IntStream.rangeClosed(0, nParticles).toArray();
+		
 
+		final Thread[] threads = Multithreader.newThreads();
+		final int nThreads = threads.length;
+		final ArrayList<ArrayList<HashSet<Integer>>> threadMaps = new ArrayList<>(nThreads);
+	
+		for (int i = 0; i < nThreads; i++) {
+			final ArrayList<HashSet<Integer>> map = new ArrayList<>(nParticles + 1);
+			// set each label to be its own root
+			final int initialCapacity = 1;
+			for (int j = 0; j < nParticles + 1; j++) {
+				final HashSet<Integer> set = new HashSet<>(initialCapacity);
+				set.add(j);
+				map.add(set);
+			}
+			threadMaps.add(map);
+		}
+			
+		final AtomicInteger ai = new AtomicInteger(0);
+		final AtomicInteger t = new AtomicInteger(0);
+		for (int thread = 0; thread < threads.length; thread++) {
+			threads[thread] = new Thread(() -> {
+
+				final ArrayList<HashSet<Integer>> map = threadMaps.get(t.getAndIncrement());
+				int[] nbh = null;
+				if (phase == FORE) nbh = new int[26];
+				else if (phase == BACK) nbh = new int[6];
+				
+				for (int z = ai.getAndIncrement(); z < d; z = ai.getAndIncrement()) {
+					IJ.showStatus("Building neighbourhood list");
+					IJ.showProgress(z, d - 1);
+					final int[] slice = particleLabels[z];
+					for (int y = 0; y < h; y++) {
+						final int yw = y * w;
+						for (int x = 0; x < w; x++) {
+							final int centre = slice[yw + x];
+							// ignore background
+							if (centre == 0) continue;
+							if (phase == FORE) get26Neighborhood(nbh, particleLabels, x, y, z, w,
+								h, d);
+							else if (phase == BACK) get6Neighborhood(nbh, particleLabels, x, y, z,
+								w, h, d);
+							addNeighboursToMap(map, nbh, centre);
+						}
+					}
+				}
+			});
+		}
+		Multithreader.startAndJoin(threads);
+		
+		//squash the threadMaps together by particle ID
+		IJ.showStatus("Squashing thread maps");
 		final ArrayList<HashSet<Integer>> map = new ArrayList<>(nParticles + 1);
-
-		final int[] lut = new int[nParticles + 1];
-		// set each label to be its own root
-		final int initialCapacity = 1;
-		for (int i = 0; i < nParticles + 1; i++) {
-			lut[i] = i;
-			final HashSet<Integer> set = new HashSet<>(initialCapacity);
-			set.add(i);
+		for (int i = 0; i <= nParticles; i++) {
+			HashSet<Integer> set = new HashSet<>(1);
+			for (int j = 0; j < nThreads; j++) {
+				set.addAll(threadMaps.get(j).get(i));
+			}
 			map.add(set);
 		}
-
-		// populate the first list with neighbourhoods
-		int[] nbh = null;
-		if (phase == FORE) nbh = new int[26];
-		else if (phase == BACK) nbh = new int[6];
-		for (int z = 0; z < d; z++) {
-			IJ.showStatus("Building neighbourhood list");
-			IJ.showProgress(z, d - 1);
-			final int[] slice = particleLabels[z];
-			for (int y = 0; y < h; y++) {
-				final int yw = y * w;
-				for (int x = 0; x < w; x++) {
-					final int centre = slice[yw + x];
-					// ignore background
-					if (centre == 0) continue;
-					if (phase == FORE) get26Neighborhood(nbh, particleLabels, x, y, z, w,
-						h, d);
-					else if (phase == BACK) get6Neighborhood(nbh, particleLabels, x, y, z,
-						w, h, d);
-					addNeighboursToMap(map, nbh, centre);
-				}
-			}
-		}
+		
 		// map now contains for every value the set of first degree neighbours
 
 		IJ.showStatus("Minimising list and generating LUT...");
