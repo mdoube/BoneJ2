@@ -2291,13 +2291,15 @@ public class ParticleCounter implements PlugIn, DialogListener {
 		
 		//squash the threadMaps together by particle ID
 		IJ.showStatus("Squashing thread maps");
-		final ArrayList<HashSet<Integer>> map = new ArrayList<>(nParticles + 1);
-		for (int i = 0; i <= nParticles; i++) {
-			HashSet<Integer> set = new HashSet<>(1);
-			for (int j = 0; j < nThreads; j++) {
-				set.addAll(threadMaps.get(j).get(i));
+		final ArrayList<HashSet<Integer>> map = new ArrayList<>();
+		for (int i = 0; i <= nParticles; i++)
+			map.add(new HashSet<Integer>(1));
+		
+		for (int th = 0; th < nThreads; th++) {
+			ArrayList<HashSet<Integer>> threadMap = threadMaps.get(th);
+			for (int i = 0; i <= nParticles; i++) {
+				map.get(i).addAll(threadMap.get(i));
 			}
-			map.add(set);
 		}
 		
 		// map now contains for every value the set of first degree neighbours
