@@ -23,25 +23,14 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 package org.bonej.plugins;
 
-import static org.bonej.plugins.ParticleCounter.JOINING.LINEAR;
-import static org.bonej.plugins.ParticleCounter.JOINING.MAPPED;
-import static org.bonej.plugins.ParticleCounter.JOINING.MULTI;
-
-import java.awt.AWTEvent;
-import java.awt.Choice;
-import java.awt.TextField;
-import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.bonej.plugins.ParticleCounter.JOINING;
-import org.bonej.util.DialogModifier;
 import org.bonej.util.ImageCheck;
 import org.bonej.util.Multithreader;
 
 import ij.IJ;
 import ij.ImagePlus;
 import ij.ImageStack;
-import ij.gui.DialogListener;
 import ij.gui.GenericDialog;
 import ij.measure.ResultsTable;
 import ij.plugin.PlugIn;
@@ -69,24 +58,7 @@ import ij.plugin.PlugIn;
  * @author Michael Doube
  * @version 1.0
  */
-public class Purify implements PlugIn, DialogListener {
-
-	@Override
-	public boolean dialogItemChanged(final GenericDialog gd, final AWTEvent e) {
-		if (DialogModifier.hasInvalidNumber(gd.getNumericFields())) return false;
-		final List<?> choices = gd.getChoices();
-		final List<?> numbers = gd.getNumericFields();
-		final Choice choice = (Choice) choices.get(0);
-		final TextField num = (TextField) numbers.get(0);
-		if (choice.getSelectedItem().contentEquals("Multithreaded")) {
-			num.setEnabled(true);
-		}
-		else {
-			num.setEnabled(false);
-		}
-		DialogModifier.registerMacroValues(gd, gd.getComponents());
-		return true;
-	}
+public class Purify implements PlugIn {
 
 	@Override
 	public void run(final String arg) {
@@ -96,24 +68,14 @@ public class Purify implements PlugIn, DialogListener {
 			return;
 		}
 		final GenericDialog gd = new GenericDialog("Setup");
-		final String[] items = { "Multithreaded", "Linear", "Mapped" };
-		gd.addChoice("Labelling algorithm", items, items[2]);
-		gd.addNumericField("Chunk Size", 4, 0, 4, "slices");
 		gd.addCheckbox("Performance Log", false);
 		gd.addCheckbox("Make_copy", true);
-		gd.addDialogListener(this);
 		gd.showDialog();
 		if (gd.wasCanceled()) return;
-		final String choice = gd.getNextChoice();
-		final JOINING labelMethod;
-		if (choice.equals(items[0])) labelMethod = MULTI;
-		else if (choice.equals(items[1])) labelMethod = LINEAR;
-		else labelMethod = MAPPED;
-		final int slicesPerChunk = (int) Math.floor(gd.getNextNumber());
 		final boolean showPerformance = gd.getNextBoolean();
 		final boolean doCopy = gd.getNextBoolean();
 		final long startTime = System.currentTimeMillis();
-		final ImagePlus purified = purify(imp, slicesPerChunk, labelMethod);
+		final ImagePlus purified = purify(imp);
 		if (null != purified) {
 			if (doCopy) {
 				purified.show();
@@ -127,12 +89,7 @@ public class Purify implements PlugIn, DialogListener {
 		}
 		final double duration = (System.currentTimeMillis() - startTime) / 1000.0;
 		if (showPerformance) {
-			if (labelMethod == LINEAR) {
-				showResults(duration, imp, imp.getImageStackSize(), LINEAR);
-			}
-			else {
-				showResults(duration, imp, slicesPerChunk, labelMethod);
-			}
+			showResults(duration, imp);
 		}
 		UsageReporter.reportEvent(this).send();
 	}
@@ -231,25 +188,14 @@ public class Purify implements PlugIn, DialogListener {
 	 *
 	 * @param duration time elapsed in purifying.
 	 * @param imp the purified image.
-	 * @param slicesPerChunk slices processed by each chunk.
-	 * @param labelMethod labelling method used.
 	 */
-	private static void showResults(final double duration, final ImagePlus imp,
-		final int slicesPerChunk, final JOINING labelMethod)
+	private static void showResults(final double duration, final ImagePlus imp)
 	{
-		final int nChunks = ParticleCounter.getNChunks(imp, slicesPerChunk);
-		final int[][] chunkRanges = ParticleCounter.getChunkRanges(imp, nChunks,
-			slicesPerChunk);
 		final ResultsTable rt = ResultsTable.getResultsTable();
 		rt.incrementCounter();
 		rt.addLabel(imp.getTitle());
-		rt.addValue("Algorithm", labelMethod.ordinal());
 		rt.addValue("Threads", Runtime.getRuntime().availableProcessors());
 		rt.addValue("Slices", imp.getImageStackSize());
-		rt.addValue("Chunks", nChunks);
-		rt.addValue("Chunk size", slicesPerChunk);
-		rt.addValue("Last chunk size", chunkRanges[1][nChunks - 1] -
-			chunkRanges[0][nChunks - 1]);
 		rt.addValue("Duration (s)", duration);
 		rt.show("Results");
 	}
@@ -391,19 +337,15 @@ public class Purify implements PlugIn, DialogListener {
 	 * largest. Foreground is 26-connected and background is 8-connected.
 	 *
 	 * @param imp input image
-	 * @param slicesPerChunk number of slices to send to each CPU core as a chunk
-	 * @param labelMethod number of labelling method
 	 * @return purified image
 	 */
-	static ImagePlus purify(final ImagePlus imp, final int slicesPerChunk,
-		final JOINING labelMethod)
+	static ImagePlus purify(final ImagePlus imp)
 	{
 
 		final ParticleCounter pc = new ParticleCounter();
 
 		final int fg = ParticleCounter.FORE;
-		final Object[] foregroundParticles = pc.getParticles(imp, slicesPerChunk,
-			fg);
+		final Object[] foregroundParticles = pc.getParticles(imp, fg);
 		final byte[][] workArray = (byte[][]) foregroundParticles[0];
 		int[][] particleLabels = (int[][]) foregroundParticles[1];
 		// index 0 is background particle's size...
@@ -411,8 +353,7 @@ public class Purify implements PlugIn, DialogListener {
 		removeSmallParticles(workArray, particleLabels, particleSizes, fg);
 
 		final int bg = ParticleCounter.BACK;
-		final Object[] backgroundParticles = pc.getParticles(imp, workArray,
-			slicesPerChunk, bg);
+		final Object[] backgroundParticles = pc.getParticles(imp, workArray, bg);
 		particleLabels = (int[][]) backgroundParticles[1];
 		particleSizes = pc.getParticleSizes(particleLabels);
 		touchEdges(imp, workArray, particleLabels, particleSizes);

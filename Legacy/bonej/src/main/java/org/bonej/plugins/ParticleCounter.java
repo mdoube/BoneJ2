@@ -216,7 +216,6 @@ public class ParticleCounter implements PlugIn, DialogListener {
 		gd.addNumericField("Split value", 0, 3, 7, units + "³");
 		gd.addNumericField("Volume_resampling", 2, 0);
 
-		gd.addNumericField("Slices per chunk", 2, 0);
 		gd.addDialogListener(this);
 		gd.showDialog();
 		if (gd.wasCanceled()) {
@@ -247,12 +246,10 @@ public class ParticleCounter implements PlugIn, DialogListener {
 		final boolean do3DOriginal = gd.getNextBoolean();
 		final boolean doEllipsoidStack = gd.getNextBoolean();
 		final int origResampling = (int) Math.floor(gd.getNextNumber());
-		final int slicesPerChunk = (int) Math.floor(gd.getNextNumber());
 
 		// get the particles and do the analysis
 		final long start = System.nanoTime();
-		final Object[] result = getParticles(imp, slicesPerChunk, minVol, maxVol,
-			FORE, doExclude);
+		final Object[] result = getParticles(imp, minVol, maxVol,	FORE, doExclude);
 		// calculate particle labelling time in ms
 		final long time = (System.nanoTime() - start) / 1000000;
 		IJ.log("Particle labelling finished in " + time + " ms");
@@ -1700,7 +1697,6 @@ public class ParticleCounter implements PlugIn, DialogListener {
 	 * Get particles, particle labels and particle sizes from a 3D ImagePlus
 	 *
 	 * @param imp Binary input image
-	 * @param slicesPerChunk number of slices per chunk. 2 is generally good.
 	 * @param minVol minimum volume particle to include
 	 * @param maxVol maximum volume particle to include
 	 * @param phase foreground or background (FORE or BACK)
@@ -1708,29 +1704,34 @@ public class ParticleCounter implements PlugIn, DialogListener {
 	 * @return Object[] {byte[][], int[][]} containing a binary workArray and
 	 *         particle labels.
 	 */
-	private Object[] getParticles(final ImagePlus imp, final int slicesPerChunk,
+	private Object[] getParticles(final ImagePlus imp,
 		final double minVol, final double maxVol, final int phase,
 		final boolean doExclude)
 	{
 		final byte[][] workArray = makeWorkArray(imp);
-		return getParticles(imp, workArray, slicesPerChunk, minVol, maxVol, phase,
+		return getParticles(imp, workArray, minVol, maxVol, phase,
 			doExclude);
 	}
 
-	private Object[] getParticles(final ImagePlus imp, final int phase) {
+	Object[] getParticles(final ImagePlus imp, final int phase)
+	{
 		final byte[][] workArray = makeWorkArray(imp);
-		final double minVol = 0;
-		final double maxVol = Double.POSITIVE_INFINITY;
-		return getParticles(imp, workArray, 4, minVol, maxVol, phase, false);
+		return getParticles(imp, workArray, 0.0,
+			Double.POSITIVE_INFINITY, phase, false);
 	}
 
+	Object[] getParticles(final ImagePlus imp, final byte[][] workArray, final int phase)
+	{
+		return getParticles(imp, workArray, 0.0,
+			Double.POSITIVE_INFINITY, phase, false);
+	}
+	
 	/**
 	 * Get particles, particle labels and sizes from a workArray using an
 	 * ImagePlus for scale information
 	 *
 	 * @param imp input binary image
 	 * @param workArray work array
-	 * @param slicesPerChunk number of slices to use for each chunk
 	 * @param minVol minimum volume particle to include
 	 * @param maxVol maximum volume particle to include
 	 * @param phase FORE or BACK for foreground or background respectively
@@ -1739,7 +1740,7 @@ public class ParticleCounter implements PlugIn, DialogListener {
 	 *         particle sizes
 	 */
 	private Object[] getParticles(final ImagePlus imp, final byte[][] workArray,
-		final int slicesPerChunk, final double minVol, final double maxVol,
+		final double minVol, final double maxVol,
 		final int phase, final boolean doExclude)
 	{
 		if (phase == FORE) {
@@ -1749,9 +1750,6 @@ public class ParticleCounter implements PlugIn, DialogListener {
 			sPhase = "background";
 		}
 		else {
-			throw new IllegalArgumentException();
-		}
-		if (slicesPerChunk < 1) {
 			throw new IllegalArgumentException();
 		}
 		
@@ -2248,26 +2246,6 @@ public class ParticleCounter implements PlugIn, DialogListener {
 		final int w, final int h, final int d)
 	{
 		return (m >= 0 && m < w && n >= 0 && n < h && o >= 0 && o < d);
-	}
-
-	/** Particle joining method */
-	public enum JOINING {
-			MULTI, LINEAR, MAPPED
-	}
-
-	Object[] getParticles(final ImagePlus imp, final int slicesPerChunk,
-		final int phase)
-	{
-		final byte[][] workArray = makeWorkArray(imp);
-		return getParticles(imp, workArray, slicesPerChunk, 0.0,
-			Double.POSITIVE_INFINITY, phase, false);
-	}
-
-	Object[] getParticles(final ImagePlus imp, final byte[][] workArray,
-		final int slicesPerChunk, final int phase)
-	{
-		return getParticles(imp, workArray, slicesPerChunk, 0.0,
-			Double.POSITIVE_INFINITY, phase, false);
 	}
 
 	/**
