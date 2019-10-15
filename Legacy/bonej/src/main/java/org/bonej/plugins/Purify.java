@@ -400,7 +400,6 @@ public class Purify implements PlugIn, DialogListener {
 	{
 
 		final ParticleCounter pc = new ParticleCounter();
-		pc.setLabelMethod(labelMethod);
 
 		final int fg = ParticleCounter.FORE;
 		final Object[] foregroundParticles = pc.getParticles(imp, slicesPerChunk,
