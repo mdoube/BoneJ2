@@ -119,6 +119,9 @@ public class ParticleCounter implements PlugIn, DialogListener {
 	private String sPhase = "";
 	private String chunkString = "";
 	private JOINING labelMethod = JOINING.MAPPED;
+	
+	/** number of particle labels */
+	private static int nParticles;
 
 	@Override
 	public boolean dialogItemChanged(final GenericDialog gd, final AWTEvent e) {
@@ -263,21 +266,22 @@ public class ParticleCounter implements PlugIn, DialogListener {
 		// calculate particle labelling time in ms
 		final long time = (System.nanoTime() - start) / 1000000;
 		IJ.log("Particle labelling finished in " + time + " ms");
+		
+		//start of analysis
 		final int[][] particleLabels = (int[][]) result[1];
-		final long[] particleSizes = getParticleSizes(particleLabels);
-		final int nParticles = particleSizes.length;
+		final long[] particleSizes = (long[]) result[2];
+		nParticles = particleSizes.length;
 		final double[] volumes = getVolumes(imp, particleSizes);
 		final double[][] centroids = getCentroids(imp, particleLabels,
 			particleSizes);
-		final int[][] limits = getParticleLimits(imp, particleLabels, nParticles);
+		final int[][] limits = getParticleLimits(imp, particleLabels);
 
 		// set up resources for analysis
 		ArrayList<List<Point3f>> surfacePoints = new ArrayList<>();
 		if (doSurfaceArea || doSurfaceVolume || doSurfaceImage || doEllipsoids ||
 			doFeret || doEllipsoidStack)
 		{
-			surfacePoints = getSurfacePoints(imp, particleLabels, limits, resampling,
-				nParticles);
+			surfacePoints = getSurfacePoints(imp, particleLabels, limits, resampling);
 		}
 		EigenvalueDecomposition[] eigens = new EigenvalueDecomposition[nParticles];
 		if (doMoments || doAxesImage || colourMode == ORIENTATION) {
@@ -298,8 +302,7 @@ public class ParticleCounter implements PlugIn, DialogListener {
 		}
 		double[][] eulerCharacters = new double[nParticles][3];
 		if (doEulerCharacters) {
-			eulerCharacters = getEulerCharacter(imp, particleLabels, limits,
-				nParticles);
+			eulerCharacters = getEulerCharacter(imp, particleLabels, limits);
 		}
 		double[][] thick = new double[nParticles][2];
 		if (doThickness) {
@@ -996,16 +999,16 @@ public class ParticleCounter implements PlugIn, DialogListener {
 		final EigenvalueDecomposition[] eigens)
 	{
 		int p = 0;
-		final int nParticles = surfacePoints.size();
+		final int nSurfaces = surfacePoints.size();
 		for (final List<Point3f> surfacePoint : surfacePoints) {
 			IJ.showStatus("Rendering surfaces...");
-			IJ.showProgress(p, nParticles);
+			IJ.showProgress(p, nSurfaces);
 			if (p > 0 && !surfacePoint.isEmpty()) {
 				Color3f pColour = new Color3f(0, 0, 0);
 				if (colourMode == GRADIENT) {
-					final float red = 1.0f - p / (float) nParticles;
+					final float red = 1.0f - p / (float) nSurfaces;
 					final float green = 1.0f - red;
-					final float blue = p / (2.0f * nParticles);
+					final float blue = p / (2.0f * nSurfaces);
 					pColour = new Color3f(red, green, blue);
 				}
 				else if (colourMode == SPLIT) {
@@ -1411,6 +1414,7 @@ public class ParticleCounter implements PlugIn, DialogListener {
 				IJ.showProgress(z, d);
 			}
 		}
+		nParticles = ID - 1;
 		return particleLabels;
 	}
 
@@ -1597,7 +1601,6 @@ public class ParticleCounter implements PlugIn, DialogListener {
 	private static double[][] getCentroids(final ImagePlus imp,
 		final int[][] particleLabels, final long[] particleSizes)
 	{
-		final int nParticles = particleSizes.length;
 		final int w = imp.getWidth();
 		final int h = imp.getHeight();
 		final int d = imp.getImageStackSize();
@@ -1636,7 +1639,6 @@ public class ParticleCounter implements PlugIn, DialogListener {
 		final int w = imp.getWidth();
 		final int h = imp.getHeight();
 		final int d = imp.getImageStackSize();
-		final int nParticles = centroids.length;
 		final EigenvalueDecomposition[] eigens =
 			new EigenvalueDecomposition[nParticles];
 		final double[][] momentTensors = new double[nParticles][6];
@@ -1720,11 +1722,10 @@ public class ParticleCounter implements PlugIn, DialogListener {
 	 * @param imp an image.
 	 * @param particleLabels particles of the image.
 	 * @param limits limits of the particles.
-	 * @param nParticles number particles.
 	 * @return euler characteristic of each image.
 	 */
 	private double[][] getEulerCharacter(final ImagePlus imp,
-		final int[][] particleLabels, final int[][] limits, final int nParticles)
+		final int[][] particleLabels, final int[][] limits)
 	{
 		final Connectivity con = new Connectivity();
 		final double[][] eulerCharacters = new double[nParticles][3];
@@ -1753,8 +1754,8 @@ public class ParticleCounter implements PlugIn, DialogListener {
 	private static double[] getFerets(
 		final List<List<Point3f>> particleSurfaces)
 	{
-		final int nParticles = particleSurfaces.size();
-		final double[] ferets = new double[nParticles];
+		final int nSurfaces = particleSurfaces.size();
+		final double[] ferets = new double[nSurfaces];
 		final ListIterator<List<Point3f>> it = particleSurfaces.listIterator();
 		int i = 0;
 		Point3f a;
@@ -1764,7 +1765,7 @@ public class ParticleCounter implements PlugIn, DialogListener {
 		ListIterator<Point3f> itb;
 		while (it.hasNext()) {
 			IJ.showStatus("Finding Feret diameter...");
-			IJ.showProgress(it.nextIndex(), nParticles);
+			IJ.showProgress(it.nextIndex(), nSurfaces);
 			surface = it.next();
 			if (surface == null) {
 				ferets[i] = Double.NaN;
@@ -1798,7 +1799,6 @@ public class ParticleCounter implements PlugIn, DialogListener {
 	private static double[][] getMeanStdDev(final ImagePlus imp,
 		final int[][] particleLabels, final long[] particleSizes)
 	{
-		final int nParticles = particleSizes.length;
 		final int d = imp.getImageStackSize();
 		final int wh = imp.getWidth() * imp.getHeight();
 		final ImageStack stack = imp.getImageStack();
@@ -1841,8 +1841,7 @@ public class ParticleCounter implements PlugIn, DialogListener {
 	private int getNCavities(final ImagePlus imp) {
 		final Object[] result = getParticles(imp, BACK);
 		final long[] particleSizes = (long[]) result[2];
-		final int nParticles = particleSizes.length;
-		return nParticles - 2;
+		return particleSizes.length - 2;
 	}
 
 	/**
@@ -1862,11 +1861,10 @@ public class ParticleCounter implements PlugIn, DialogListener {
 	 *
 	 * @param imp ImagePlus (used for stack size)
 	 * @param particleLabels work array containing labelled particles
-	 * @param nParticles number of particles in the stack
 	 * @return int[][] containing x, y and z minima and maxima.
 	 */
 	private static int[][] getParticleLimits(final ImagePlus imp,
-		final int[][] particleLabels, final int nParticles)
+		final int[][] particleLabels)
 	{
 		final int w = imp.getWidth();
 		final int h = imp.getHeight();
@@ -1984,8 +1982,11 @@ public class ParticleCounter implements PlugIn, DialogListener {
 		if (slicesPerChunk < 1) {
 			throw new IllegalArgumentException();
 		}
-		// Set up the chunks
+		
+		//first pass through whole stack
 		final int[][] particleLabels = firstIDAttribution(imp, workArray, phase);
+		
+    // Set up the chunks
 		if (labelMethod == JOINING.MULTI) {
 			// connect particles within chunks
 			final int nChunks = getNChunks(imp, slicesPerChunk);
@@ -2018,15 +2019,13 @@ public class ParticleCounter implements PlugIn, DialogListener {
 			joinStructures(imp, particleLabels, phase);
 		}
 		else if (labelMethod == JOINING.MAPPED) {
-			final int nParticles = getParticleSizes(particleLabels).length;
-			joinMappedStructures(imp, particleLabels, nParticles, phase);
+			joinMappedStructures(imp, particleLabels, phase);
 		}
 		filterParticles(imp, workArray, particleLabels, minVol, maxVol, phase);
 		if (doExclude) excludeOnEdges(imp, particleLabels, workArray);
 		minimiseLabels(particleLabels);
 		final long[] particleSizes = getParticleSizes(particleLabels);
 		return new Object[] { workArray, particleLabels, particleSizes };
-
 	}
 
 	/**
@@ -2137,8 +2136,7 @@ public class ParticleCounter implements PlugIn, DialogListener {
 	}
 
 	private static ArrayList<List<Point3f>> getSurfacePoints(final ImagePlus imp,
-		final int[][] particleLabels, final int[][] limits, final int resampling,
-		final int nParticles)
+		final int[][] particleLabels, final int[][] limits, final int resampling)
 	{
 		final Calibration cal = imp.getCalibration();
 		final ArrayList<List<Point3f>> surfacePoints = new ArrayList<>();
@@ -2232,7 +2230,7 @@ public class ParticleCounter implements PlugIn, DialogListener {
 	}
 
 	private static void joinMappedStructures(final ImagePlus imp,
-		final int[][] particleLabels, final int nParticles, final int phase)
+		final int[][] particleLabels, final int phase)
 	{
 		IJ.showStatus("Mapping structures and joining...");
 		final int w = imp.getWidth();
@@ -2860,34 +2858,16 @@ public class ParticleCounter implements PlugIn, DialogListener {
 		final int d = particleLabels.length;
 		final int wh = particleLabels[0].length;
 
-		// find the highest value particleLabel
-		AtomicInteger ai = new AtomicInteger(0);
-		final int[] maxArray = new int[d];
-		
-		final Thread[] threads = Multithreader.newThreads();
-		for (int thread = 0; thread < threads.length; thread++) {
-			threads[thread] = new Thread(() -> {
-				for (int z = ai.getAndIncrement(); z < d; z = ai.getAndIncrement()) {
-					final int[] slice = particleLabels[z];
-					int maxParticle = 0;
-					for (int i = 0; i < wh; i++) {
-						maxParticle = Math.max(maxParticle, slice[i]);
-					}
-					maxArray[z] = maxParticle;
-				}
-			});
-		}
-		Multithreader.startAndJoin(threads);
-		final int maxParticle = Arrays.stream(maxArray).max().getAsInt();
+		final int maxParticle = nParticles;
 		
 		//make a list of all the particle sizes with 
 		//index = particle value
 		AtomicInteger an = new AtomicInteger(0);
 		final long[][] partSizes = new long[d][];
 		
-		final Thread[] threadss = Multithreader.newThreads();
+		final Thread[] threads = Multithreader.newThreads();
 		for (int thread = 0; thread < threads.length; thread++) {
-			threadss[thread] = new Thread(() -> {
+			threads[thread] = new Thread(() -> {
 				for (int z = an.getAndIncrement(); z < d; z = an.getAndIncrement()) {
 					final long[] particleSizes = new long[maxParticle + 1];
 					final int[] slice = particleLabels[z];
@@ -2898,7 +2878,7 @@ public class ParticleCounter implements PlugIn, DialogListener {
 				}
 			});
 		}
-		Multithreader.startAndJoin(threadss);
+		Multithreader.startAndJoin(threads);
 		
 		final long[] particleSizes = new long[maxParticle + 1];
 		for (int i = 0; i <= maxParticle; i++) {
