@@ -1331,6 +1331,36 @@ public class ParticleCounter implements PlugIn, DialogListener {
 		neighborhood[12] = getPixel(image, xm1, y, z, w, h, d);
 	}
 	
+	/**
+	 * Get 4 neighborhood of a pixel in a 3D image (0 border conditions)
+	 * Longhand, hard-coded for speed. This neighbourhood contains the 
+	 * set of pixels that have already been visited by the cursor
+	 * in the current plane as it raster scans in an x-y order.
+	 *
+	 * @param neighborhood a neighbourhood in the image.
+	 * @param image 3D image (int[][])
+	 * @param x x- coordinate
+	 * @param y y- coordinate
+	 * @param z z- coordinate (in image stacks the indexes start at 1)
+	 * @param w width of the image.
+	 * @param h height of the image.
+	 * @param d depth of the image.
+	 */
+	private static void get4Neighborhood(final int[] neighborhood,
+		final int[][] image, final int x, final int y, final int z, final int w,
+		final int h, final int d)
+	{
+		final int xm1 = x - 1;
+		final int xp1 = x + 1;
+		final int ym1 = y - 1;
+				
+		neighborhood[0] = getPixel(image, xm1, ym1, z, w, h, d);
+		neighborhood[1] = getPixel(image, x, ym1, z, w, h, d);
+		neighborhood[2] = getPixel(image, xp1, ym1, z, w, h, d);
+		
+		neighborhood[3] = getPixel(image, xm1, y, z, w, h, d);
+	}
+	
 	private static void get6Neighborhood(final int[] neighborhood,
 		final int[][] image, final int x, final int y, final int z, final int w,
 		final int h, final int d)
@@ -1350,6 +1380,14 @@ public class ParticleCounter implements PlugIn, DialogListener {
 		neighborhood[0] = getPixel(image, x - 1, y, z, w, h, d);
 		neighborhood[1] = getPixel(image, x, y - 1, z, w, h, d);
 		neighborhood[2] = getPixel(image, x, y, z - 1, w, h, d);
+	}
+	
+	private static void get2Neighborhood(final int[] neighborhood,
+		final int[][] image, final int x, final int y, final int z, final int w,
+		final int h, final int d)
+	{
+		neighborhood[0] = getPixel(image, x - 1, y, z, w, h, d);
+		neighborhood[1] = getPixel(image, x, y - 1, z, w, h, d);
 	}
 
 	/**
