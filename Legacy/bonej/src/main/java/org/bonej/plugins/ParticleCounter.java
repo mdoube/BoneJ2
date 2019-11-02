@@ -2280,10 +2280,41 @@ public class ParticleCounter implements PlugIn, DialogListener {
 		return changed;
 	}
 
+	/**
+	 * checks whether a pixel at (m, n, o) is within the image boundaries
+	 * 
+	 * 26- and 6-neighbourhood version 
+	 * 
+	 * @param m x coordinate
+	 * @param n y coordinate
+	 * @param o z coordinate
+	 * @param w image width
+	 * @param h image height
+	 * @param d image depth
+	 * @return true if the pixel is within the image bounds
+	 */
 	private static boolean withinBounds(final int m, final int n, final int o,
 		final int w, final int h, final int d)
 	{
 		return (m >= 0 && m < w && n >= 0 && n < h && o >= 0 && o < d);
+	}
+	
+	/**
+	 * checks whether a pixel at (m, n) is within the image boundaries
+	 *
+	 * version for 13-, 3-, 4-, and 2- neighbourhoods, provided that
+	 * 13- and 3- neighbourhoods are never used on the 0th slice.
+	 * 
+	 * Do not need to check against width and height because these
+	 * half-neighbourhoods only 'look backwards'. 
+	 * 
+	 * @param m x coordinate
+	 * @param n y coordinate
+	 * @return true if the pixel is within the image bounds
+	 */
+	private static boolean withinBounds(final int m, final int n)
+	{
+		return (m >= 0 && n >= 0);
 	}
 
 	/**
