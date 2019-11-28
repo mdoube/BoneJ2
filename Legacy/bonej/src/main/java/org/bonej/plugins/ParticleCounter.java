@@ -31,10 +31,12 @@ import java.awt.TextField;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.ListIterator;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
@@ -116,6 +118,8 @@ public class ParticleCounter implements PlugIn, DialogListener {
 	private static final int GRADIENT = 0;
 	private static final int SPLIT = 1;
 	private static final int ORIENTATION = 2;
+	/** 2^23 - greatest integer that can be represented precisely by a float */
+	private static final int MAX_LABEL = 8388608; 
 	private String sPhase = "";
 	
 	/** number of particle labels */
@@ -397,7 +401,7 @@ public class ParticleCounter implements PlugIn, DialogListener {
 		// Show resulting image stacks
 		if (doParticleImage) {
 			displayParticleLabels(particleLabels, imp).show();
-			IJ.run("Fire");
+			IJ.run("3-3-2 RGB");
 		}
 		if (doParticleSizeImage) {
 			displayParticleValues(imp, particleLabels, volumes).show();
@@ -500,12 +504,12 @@ public class ParticleCounter implements PlugIn, DialogListener {
 		//first pass through whole stack
 		final int[][] particleLabels = firstIDAttribution(imp, workArray, phase);
 		
-		joinMappedStructures(imp, particleLabels, phase);
+//		joinMappedStructures(imp, particleLabels, phase);
 
 		filterParticles(imp, workArray, particleLabels, minVol, maxVol, phase);
 		
 		if (doExclude) excludeOnEdges(imp, particleLabels, workArray);
-		minimiseLabels(particleLabels);
+//		minimiseLabels(particleLabels);
 		final long[] particleSizes = getParticleSizes(particleLabels);
 		return new Object[] { workArray, particleLabels, particleSizes };
 	}
@@ -553,82 +557,431 @@ public class ParticleCounter implements PlugIn, DialogListener {
 	private int[][] firstIDAttribution(final ImagePlus imp,
 		final byte[][] workArray, final int phase)
 	{
+
 		final int w = imp.getWidth();
 		final int h = imp.getHeight();
-		final int d = imp.getImageStackSize();
+		final int nSlices = imp.getImageStackSize();
 		final int wh = w * h;
-		IJ.showStatus("Finding " + sPhase + " structures");
-		final int[][] particleLabels = new int[d][wh];
-		int ID = 1;
-
-		if (phase == FORE) {
-			final int[] nbh = new int[13];
-			for (int z = 0; z < d; z++) {
-				for (int y = 0; y < h; y++) {
-					final int rowIndex = y * w;
-					for (int x = 0; x < w; x++) {
-						final int arrayIndex = rowIndex + x;
-						if (workArray[z][arrayIndex] == FORE) {
-							particleLabels[z][arrayIndex] = ID;
-							int minTag = ID;
-							// Find the minimum particleLabel in the
-							// neighbouring pixels
-							get13Neighborhood(nbh, particleLabels, x, y, z, w, h, d);
-							
-							for (int i = 0; i < 13; i++) {
-								final int tagv = nbh[i];
-								if (tagv == 0) continue;
-								if (tagv < minTag) minTag = tagv;
+		final int nProcessors = Runtime.getRuntime().availableProcessors();
+		final int minSlicesPerChunk = 10;
+		
+		//set up number of chunks
+		final int nChunks =
+				nSlices < minSlicesPerChunk * nProcessors ?
+				(int) Math.ceil((double) nSlices / (double) minSlicesPerChunk) :
+				nProcessors;
+		//IJ.log("nSlices = "+nSlices);
+		//IJ.log("nChunks = "+nChunks);
+		
+		//set up chunk sizes - last chunk is the remainder
+		final int slicesPerChunk = (int) Math.ceil((double) nSlices / (double) nChunks);
+		
+		//IJ.log("slicesPerChunk = "+slicesPerChunk);
+		
+		//set up start slice array
+		final int[] startSlices = new int[nChunks];
+		for (int i = 0; i < nChunks; i++) {
+			startSlices[i] = i * slicesPerChunk;
+			//IJ.log("startSlices["+i+"] = "+startSlices[i]);
+		}
+		
+		
+		//set up label offsets to avoid collisions between chunks
+		final int chunkLabelSpace = MAX_LABEL / nChunks;
+		final int[] chunkIDOffsets = new int[nChunks];
+		for (int i = 0; i < nChunks; i++) {
+			chunkIDOffsets[i] = i * chunkLabelSpace;
+			//IJ.log("chunkIDOffsets["+i+"] = "+chunkIDOffsets[i]);
+		}
+			
+		//set up a map split into one per chunk
+		final ArrayList<ArrayList<HashSet<Integer>>> chunkMaps = new ArrayList<>(nChunks);
+		for (int chunk = 0; chunk < nChunks; chunk++) {
+			//assume there is a new particle label for every 10000 pixels
+			final int initialArrayCapacity = 1 + w * h * slicesPerChunk / 10000;
+			final ArrayList<HashSet<Integer>> map = new ArrayList<>(initialArrayCapacity);
+			//IJ.log("Created a new map with initial capacity of "+initialArrayCapacity);
+			final int initialHashSetCapacity = 1;
+			final int IDoffset = chunkIDOffsets[chunk];
+			for (int j = 0; j < initialArrayCapacity; j++) {
+				//create a new set containing a single value of j + IDoffset (the root) 
+				final HashSet<Integer> set = new HashSet<>(initialHashSetCapacity);
+				//IJ.log("Created a new set with initial capacity of "+initialHashSetCapacity+" and intial value of "+(j+IDoffset));
+				set.add(j + IDoffset);
+				map.add(set);
+			}
+			chunkMaps.add(map);
+		}
+		
+		//set up the particle label stack
+		final int[][] particleLabels = new int[nSlices][wh];
+		
+		//set up a count of labels per chunk
+		final int[] nChunkParticles = new int[nChunks];
+		
+		//set up the threads (one thread per chunk)
+		final Thread[] threads = new Thread[nChunks];
+		
+		for (int thread = 0; thread < nChunks; thread++) {
+			//each chunk is processed in a single thread
+			final int chunk = thread;
+			//the starting ID for each chunk is the offset
+			final int IDoffset = chunkIDOffsets[chunk]; 
+			threads[chunk] = new Thread(() -> {
+				//get the Array of HashSets that relate to this image chunk
+				final ArrayList<HashSet<Integer>> chunkMap = chunkMaps.get(chunk);
+				
+				//label image IDs have the chunk ID offset
+				int ID = IDoffset;
+				
+				if (ID == 0) ID = 1;
+				
+				final int startSlice = startSlices[chunk];
+								
+				//final slice of the chunk is the next chunk's start slice minus one for all but the last chunk
+				final int endSlice = chunk + 1 < nChunks ? startSlices[chunk + 1] - 1 : nSlices - 1;
+								
+				if (phase == FORE) {
+				  //first slice of the chunk - use 4 neighbourhood to not
+					//bleed into prior chunk
+					final int[] sliceNbh = new int[4];
+					for (int y = 0; y < h; y++) {
+						final int rowIndex = y * w;
+						for (int x = 0; x < w; x++) {
+							final int arrayIndex = rowIndex + x;
+							if (workArray[startSlice][arrayIndex] == FORE) {
+								// Find the minimum particleLabel in the
+								// neighbouring pixels
+								get4Neighborhood(sliceNbh, particleLabels, x, y, startSlice, w, h, nSlices);
+								
+								final int minTag = getMinTag(sliceNbh, ID);
+								
+								//add neighbourhood to map
+								addNeighboursToMap(chunkMap, sliceNbh, minTag, IDoffset);
+																
+								// assign the smallest particle label from the
+								// neighbours to the pixel
+								particleLabels[startSlice][arrayIndex] = minTag;
+								
+								// increment the particle label
+								if (minTag == ID) {
+									ID++;
+									//IJ.log("ID incremented to "+ID);
+									expandMap(chunkMap, ID, IDoffset);
+								}
 							}
-							
-							// assign the smallest particle label from the
-							// neighbours to the pixel
-							particleLabels[z][arrayIndex] = minTag;
-							// increment the particle label
-							if (minTag == ID) {
-								ID++;
+						}
+					}
+					
+					//use 13 neighbourhood for all but first slice
+					final int[] nbh = new int[13];
+					for (int z = startSlice + 1; z <= endSlice ; z++) {
+						for (int y = 0; y < h; y++) {
+							final int rowIndex = y * w;
+							for (int x = 0; x < w; x++) {
+								final int arrayIndex = rowIndex + x;
+								if (workArray[z][arrayIndex] == FORE) {
+
+									// Find the minimum particleLabel in the
+									// neighbouring pixels
+									get13Neighborhood(nbh, particleLabels, x, y, z, w, h, nSlices);
+									
+									final int minTag = getMinTag(nbh, ID);
+									
+								  //add neighbourhood to map
+									addNeighboursToMap(chunkMap, nbh, minTag, IDoffset);
+									
+									// assign the smallest particle label from the
+									// neighbours to the pixel
+									particleLabels[z][arrayIndex] = minTag;
+									// increment the particle label
+									if (minTag == ID) {
+										ID++;
+										//IJ.log("ID incremented to "+ID);
+										expandMap(chunkMap, ID, IDoffset);
+									}
+								}
 							}
 						}
 					}
 				}
-				IJ.showProgress(z, d);
+				
+				else if (phase == BACK) {
+				  //first slice of the chunk - use 2 neighbourhood to not
+					//bleed into prior chunk
+					final int[] sliceNbh = new int[2];
+					for (int y = 0; y < h; y++) {
+						final int rowIndex = y * w;
+						for (int x = 0; x < w; x++) {
+							final int arrayIndex = rowIndex + x;
+							if (workArray[startSlice][arrayIndex] == BACK) {
+								// Find the minimum particleLabel in the
+								// neighbouring pixels
+								get2Neighborhood(sliceNbh, particleLabels, x, y, startSlice, w, h, nSlices);
+								
+								final int minTag = getMinTag(sliceNbh, ID);
+								
+								//add neighbourhood to map
+								addNeighboursToMap(chunkMap, sliceNbh, minTag, IDoffset);
+																
+								// assign the smallest particle label from the
+								// neighbours to the pixel
+								particleLabels[startSlice][arrayIndex] = minTag;
+								// increment the particle label
+								if (minTag == ID) {
+									ID++;
+									expandMap(chunkMap, ID, IDoffset);
+								}
+							}
+						}
+					}
+
+					//use 3-neighbourhood for all but the first slice
+					final int[] nbh = new int[3];
+					for (int z = 0; z < nSlices; z++) {
+						for (int y = 0; y < h; y++) {
+							final int rowIndex = y * w;
+							for (int x = 0; x < w; x++) {
+								final int arrayIndex = rowIndex + x;
+								if (workArray[z][arrayIndex] == BACK) {
+
+									// Find the minimum particleLabel in the
+									// neighbouring pixels
+									get3Neighborhood(nbh, particleLabels, x, y, z, w, h, nSlices);
+
+									final int minTag = getMinTag(nbh, ID);
+									
+									addNeighboursToMap(chunkMap, nbh, minTag, IDoffset);
+									
+									// assign the smallest particle label from the
+									// neighbours to the pixel
+									particleLabels[z][arrayIndex] = minTag;
+									// increment the particle label
+									if (minTag == ID) {
+										ID++;
+										expandMap(chunkMap, ID, IDoffset);
+									}
+								}
+							}
+						}
+					}
+				}
+				nChunkParticles[chunk] = ID - IDoffset;
+			});
+		}
+		Multithreader.startAndJoin(threads);
+		
+		//find neighbours in the previous chunk
+		//this will result in occasional HashSet values less than 
+		//the chunk's IDoffset, which indicate linkage between chunks
+		final Thread[] stitchingThreads = new Thread[nChunks];
+		for (int thread = 0; thread < nChunks; thread++) {
+			final int chunk = thread;
+			stitchingThreads[thread] = new Thread(() -> {
+				
+				//need only one z per thread
+				final int z = startSlices[chunk];
+				final ArrayList<HashSet<Integer>> chunkMap = chunkMaps.get(chunk);
+				final int IDoffset = chunkIDOffsets[chunk];
+				
+				if (chunk > 0) {
+				if (phase == FORE) {
+					final int[] nbh = new int[9];
+					for (int y = 0; y < h; y++) {
+						final int rowIndex = y * w;
+						for (int x = 0; x < w; x++) {
+							final int arrayIndex = rowIndex + x;
+							if (workArray[z][arrayIndex] == FORE) {
+								final int label = particleLabels[z][arrayIndex];
+								get9Neighborhood(nbh, particleLabels, x, y, z, w, h, nSlices);
+								addChunkNeighboursToMap(chunkMap, nbh, label - IDoffset);
+							}
+						}
+					}
+				}
+
+				if (phase == BACK) {
+					final int[] nbh = new int[1];
+					for (int y = 0; y < h; y++) {
+						final int rowIndex = y * w;
+						for (int x = 0; x < w; x++) {
+							final int arrayIndex = rowIndex + x;
+							if (workArray[z][arrayIndex] == FORE) {
+								final int label = particleLabels[z][arrayIndex];
+								get1Neighborhood(nbh, particleLabels, x, y, z, w);
+								addChunkNeighboursToMap(chunkMap, nbh, label - IDoffset);
+							}
+						}
+					}
+				}
+				}
+			});
+		}
+		Multithreader.startAndJoin(stitchingThreads);
+				
+		int labelCount = 0;
+		
+ 	  //snowball the HashSets, handling the chunk offsets and indexes
+		//iterate backwards through the chunk maps
+		
+		boolean somethingChanged = true;
+		while (somethingChanged) {
+			somethingChanged = false;
+			for (int chunk = nChunks - 1; chunk >= 0 ; chunk--) {
+				final ArrayList<HashSet<Integer>> map = chunkMaps.get(chunk);
+				final int IDoffset = chunkIDOffsets[chunk];
+				for (int i = map.size() - 1; i >= 0; i--) {
+					final HashSet<Integer> set = map.get(i);
+					if (!set.isEmpty()) {
+						//find the minimum label in the set
+						int minLabel = Integer.MAX_VALUE;
+						for (Integer label : set) {
+							if (label < minLabel)
+								minLabel = label;
+						}
+						
+						//if minimum label is less than this chunk's offset, need
+						//to move set to previous chunk's map
+						if (minLabel < IDoffset) {
+							final ArrayList<HashSet<Integer>> priorMap = chunkMaps.get(chunk - 1);
+							final int priorIDoffset = chunkIDOffsets[chunk - 1];
+							//IJ.log("Found label = "+minLabel+" in map = "+chunk+" set = "+i+", moving to map = "+(chunk-1)+" set = "+(minLabel - priorIDoffset));
+							priorMap.get(minLabel - priorIDoffset).addAll(set);
+							set.clear();
+							somethingChanged = true;
+							break;
+						}
+						//move whole set's contents to a lower position in the map
+						if (minLabel < i + IDoffset) {
+							//IJ.log("Found label = "+minLabel+" in map = "+chunk+" set = "+i+", moving to set = "+(minLabel - IDoffset));
+							map.get(minLabel - IDoffset).addAll(set);
+							set.clear();
+							somethingChanged = true;
+							break;
+						}
+					}
+				}
+			}
+
+			//count unique labels and particles
+			labelCount = 0;
+			nParticles = 0;
+			for (ArrayList<HashSet<Integer>> map : chunkMaps) {
+				for (HashSet<Integer> set : map) {
+					if (!set.isEmpty()) {
+						labelCount += set.size();
+						nParticles++;
+					}
+				}
+			}
+		}
+
+		//set up a 1D HashMap of HashSets with the minimum label
+		//set as the 'root' (key) of the hashMap
+		HashMap<Integer, HashSet<Integer>> hashMap = new HashMap<>(labelCount);
+		for (ArrayList<HashSet<Integer>> map : chunkMaps) {
+			for (HashSet<Integer> set : map) {
+				int root = Integer.MAX_VALUE;
+				for (Integer label : set) {
+					if (label < root)
+						root = label;
+				}
+				hashMap.put(root, set);
 			}
 		}
 		
-		else if (phase == BACK) {
-			final int[] nbh = new int[3];
-			for (int z = 0; z < d; z++) {
-				for (int y = 0; y < h; y++) {
-					final int rowIndex = y * w;
-					for (int x = 0; x < w; x++) {
-						final int arrayIndex = rowIndex + x;
-						if (workArray[z][arrayIndex] == BACK) {
-							particleLabels[z][arrayIndex] = ID;
-							int minTag = ID;
-							// Find the minimum particleLabel in the
-							// neighbouring pixels
-							get3Neighborhood(nbh, particleLabels, x, y, z, w, h, d);
-							
-							for (int i = 0; i < 3; i++) {
-								final int tagv = nbh[i];
-								if (tagv == 0) continue;
-								if (tagv < minTag) minTag = tagv;
-							}
-							
-							// assign the smallest particle label from the
-							// neighbours to the pixel
-							particleLabels[z][arrayIndex] = minTag;
-							// increment the particle label
-							if (minTag == ID) {
-								ID++;
-							}
-						}
-					}
-				}
-				IJ.showProgress(z, d);
+		//set up a LUT to keep track of the minimum replacement value for each label
+		final HashMap<Integer, Integer> lutMap = new HashMap<>(labelCount);
+		for (ArrayList<HashSet<Integer>> map : chunkMaps) {
+			for (HashSet<Integer> set : map) {
+				for (Integer label : set)
+					//start so that each label looks up itself
+					lutMap.put(label, label);
 			}
 		}
-		nParticles = ID - 1;
+
+		//check the hashMap for duplicate appearances and merge sets downwards
+		somethingChanged = true;
+		while (somethingChanged) {
+			somethingChanged = false;
+			Iterator<Map.Entry<Integer, HashSet<Integer>>> it = hashMap.entrySet().iterator();
+			while (it.hasNext()) {
+				Map.Entry<Integer, HashSet<Integer>> pair = it.next();
+				HashSet<Integer> set = pair.getValue();
+				int key = pair.getKey();
+				for (Integer label : set) {
+					int lutValue = lutMap.get(label);
+					//lower the lut lookup value to the root of this set
+					if (lutValue > key) {
+						lutMap.put(label, key);
+						somethingChanged = true;
+					}
+					//looks like there is a value in the wrong place
+					if (lutValue < key) {
+						//move all the set's labels to the lower root
+						hashMap.get(lutValue).addAll(set);
+						//update all the set's lut lookups with the new root
+						for (Integer l : set) {
+							lutMap.put(l, lutValue);
+							//IJ.log("Updating lut label "+l+" with lookup value "+lutValue); 
+						}
+						set.clear();
+						somethingChanged = true;
+						break;
+					}
+				}
+			}
+		}
+		
+		//count number of unique values in the LUT
+		HashSet<Integer> lutValues = new HashSet<>();
+		Iterator<Map.Entry<Integer, Integer>> itL = lutMap.entrySet().iterator();
+		while (itL.hasNext()) {
+			Map.Entry<Integer, Integer> pair = itL.next();
+			lutValues.add(pair.getValue());
+		}
+		final int nLabels = lutValues.size();
+		
+		//assign incremental replacement values
+		//translate old 
+		final HashMap<Integer, Integer> lutLut = new HashMap<>(nLabels);
+		int value = 1;
+		for (Integer lutValue : lutValues) {
+			if (lutValue == 0) {
+				lutLut.put(0, 0);
+				continue;
+			}
+			lutLut.put(lutValue, value);
+			value++;
+		}
+		
+		//lutLut now contains mapping from the old lut value (the lutLut 'key') to the
+		//new lut value (lutLut 'value')
+		
+		Iterator<Map.Entry<Integer, Integer>> itR = lutMap.entrySet().iterator();
+		while (itR.hasNext()) {
+			Map.Entry<Integer, Integer> pair = itR.next();
+			Integer oldLutValue = pair.getValue();
+			Integer newLutValue = lutLut.get(oldLutValue);
+			pair.setValue(newLutValue);
+		}
+		
+		//translate the HashMap LUT to a chunkwise LUT, to be used in combination
+		//with the IDoffsets.
+		int[][] lut = new int[nChunks][];
+		for (int chunk = 0; chunk < nChunks; chunk++) {
+			final int nChunkLabels = nChunkParticles[chunk];
+			final int IDoffset = chunkIDOffsets[chunk];
+			int[] chunkLut = new int[nChunkLabels];
+			for (int i = 0; i < nChunkLabels; i++) {
+				chunkLut[i] = lutMap.get(i + IDoffset);
+			}
+			lut[chunk] = chunkLut;
+		}
+		
+		//rewrite the pixel values using the LUT
+		applyLUT(particleLabels, lut, chunkIDOffsets, startSlices, w, h, nSlices);
+		
 		return particleLabels;
 	}
 
@@ -682,7 +1035,7 @@ public class ParticleCounter implements PlugIn, DialogListener {
 									h, d);
 								else if (phase == BACK) get6Neighborhood(nbh, particleLabels, x, y, z,
 									w, h, d);
-								addNeighboursToMap(map, nbh, centre);
+								addChunkNeighboursToMap(map, nbh, centre);
 							}
 						}
 					}
@@ -956,30 +1309,81 @@ public class ParticleCounter implements PlugIn, DialogListener {
 			return changed;
 		}
 	
+		/**
+		 * Increase the length of the list of label HashSets to
+		 * accommodate the full range of IDs
+		 * 
+		 * @param map
+		 * @param ID
+		 * @param IDoffset
+		 */
+		private static void expandMap(final List<HashSet<Integer>> map,
+			final int ID, final int IDoffset) {
+			while (ID - IDoffset >= map.size()) {
+				//IJ.log("Map is too small ("+map.size()+"). Adding a new set with root value = "+(map.size()+IDoffset));
+				final HashSet<Integer> set = new HashSet<>();
+				set.add(map.size() + IDoffset);
+				map.add(set);
+			}
+		}
 	
 	/**
 	 * Add all the neighbouring labels of a pixel to the map, except 0
-	 * (background) and the pixel's own label, which is already in the map. The
+	 * (background) and the pixel's own label, which is already in the map.
+	 * 
+	 * This chunked version of the map stores label IDs ('centre') in the HashSet and 
+	 * uses label ID minus per chunk ID offset as the List index.  
+	 * 
+	 * In this version the non-zero neighbours' labels  are always bigger than the centre, so 
+	 * the centre value is added to the neighbours' map indices.
+	 *
+	 * @param map a map of LUT values.
+	 * @param nbh a neighbourhood in the image.
+	 * @param centre current pixel's label (with offset)
+	 * @param IDoffset chunk's ID offset
+	 */
+	private static void addNeighboursToMap(final List<HashSet<Integer>> map,
+		final int[] nbh, final int centre, final int IDoffset)
+	{
+		final int l = nbh.length;
+		int lastNonZero = -1;
+		for (int i = 0; i < l; i++) {
+			final int val = nbh[i];
+
+			// skip background, self-similar, and the last label added
+			// adding them again is a redundant waste of time
+			if (val == 0 || val == centre || val == lastNonZero)
+				continue;
+			map.get(val - IDoffset).add(centre);
+			lastNonZero = val;
+		}
+	}
+	
+	/**
+	 * Add all the neighbouring labels of a pixel to the map, except 0
+	 * (background). The
 	 * LUT gets updated with the minimum neighbour found, but this is only within
 	 * the first neighbours and not the minimum label in the pixel's neighbour
 	 * network
 	 *
 	 * @param map a map of LUT values.
 	 * @param nbh a neighbourhood in the image.
-	 * @param centre current pixel's label
+	 * @param centre current pixel's map index (label - IDoffset)
 	 */
-	private static void addNeighboursToMap(final List<HashSet<Integer>> map,
+	private static void addChunkNeighboursToMap(final List<HashSet<Integer>> map,
 		final int[] nbh, final int centre)
 	{
-		final HashSet<Integer> set = map.get(centre);
 		final int l = nbh.length;
+		final HashSet<Integer> set = map.get(centre);
+		int lastNonZero = -1;
 		for (int i = 0; i < l; i++) {
 			final int val = nbh[i];
-			// skip background and self-similar labels
-			// adding them again is a redundant waste of time
-			if (val == 0 || val == centre)
+			// skip background
+			// and the last non-zero value (already added)
+			if (val == 0 || val == lastNonZero)
 				continue;
 			set.add(val);
+			lastNonZero = val;
 		}
 	}
 	
@@ -1077,6 +1481,43 @@ public class ParticleCounter implements PlugIn, DialogListener {
 						final int label = slice[i];
 						if (label == 0) continue;
 						slice[i] = lut[label];
+					}
+				}
+			});
+		}
+		Multithreader.startAndJoin(threads);
+	}
+	
+	/**
+	 * Apply the LUT in multiple threads
+	 * 
+	 * @param particleLabels
+	 * @param lut
+	 * @param w
+	 * @param h
+	 * @param d
+	 */
+	private static void applyLUT(final int[][] particleLabels,
+		final int[][] lut, final int[] chunkIDOffsets, final int[] startSlices,
+		final int w, final int h, final int d)
+	{
+		final int nChunks = chunkIDOffsets.length;
+		
+		final Thread[] threads = new Thread[nChunks];
+		for (int thread = 0; thread < nChunks; thread++) {
+			final int chunk = thread;
+			threads[thread] = new Thread(() -> {
+				final int startSlice = startSlices[chunk];
+				final int endSlice = chunk + 1 < nChunks ? startSlices[chunk + 1] - 1 : d - 1;
+				final int IDoffset = chunkIDOffsets[chunk];
+				final int[] chunkLut = lut[chunk]; 
+				for (int z = startSlice; z <= endSlice; z++) {
+					final int[] slice = particleLabels[z];
+					final int l = slice.length;
+					for (int i = 0; i < l; i++) {
+						final int label = slice[i];
+						if (label == 0) continue;
+						slice[i] = chunkLut[label - IDoffset];
 					}
 				}
 			});
@@ -1189,6 +1630,44 @@ public class ParticleCounter implements PlugIn, DialogListener {
 	}
 	
 	/**
+	 * Get 9 neighborhood of a pixel in a 3D image (0 border conditions)
+	 * Longhand, hard-coded for speed. This neighbourhood contains the 
+	 * set of pixels in previous plane (z-1) of the pixel's 26-neighbourhood
+	 *
+	 * @param neighborhood a neighbourhood in the image.
+	 * @param image 3D image (int[][])
+	 * @param x x- coordinate
+	 * @param y y- coordinate
+	 * @param z z- coordinate (in image stacks the indexes start at 1)
+	 * @param w width of the image.
+	 * @param h height of the image.
+	 * @param d depth of the image.
+	 */
+	private static void get9Neighborhood(final int[] neighborhood,
+		final int[][] image, final int x, final int y, final int z, final int w,
+		final int h, final int d)
+	{
+		final int xm1 = x - 1;
+		final int xp1 = x + 1;
+		final int ym1 = y - 1;
+		final int yp1 = y + 1;
+		final int zm1 = z - 1;
+
+		neighborhood[0] = getPixel(image, xm1, ym1, zm1, w, h, d);
+		neighborhood[1] = getPixel(image, x, ym1, zm1, w, h, d);
+		neighborhood[2] = getPixel(image, xp1, ym1, zm1, w, h, d);
+		
+		neighborhood[3] = getPixel(image, xm1, y, zm1, w, h, d);
+		neighborhood[4] = getPixel(image, x, y, zm1, w, h, d);
+		neighborhood[5] = getPixel(image, xp1, y, zm1, w, h, d);
+		
+		neighborhood[6] = getPixel(image, xm1, yp1, zm1, w, h, d);
+		neighborhood[7] = getPixel(image, x, yp1, zm1, w, h, d);
+		neighborhood[8] = getPixel(image, xp1, yp1, zm1, w, h, d);
+	}
+	
+	
+	/**
 	 * Get 4 neighborhood of a pixel in a 3D image (0 border conditions)
 	 * Longhand, hard-coded for speed. This neighbourhood contains the 
 	 * set of pixels that have already been visited by the cursor
@@ -1200,12 +1679,9 @@ public class ParticleCounter implements PlugIn, DialogListener {
 	 * @param y y- coordinate
 	 * @param z z- coordinate (in image stacks the indexes start at 1)
 	 * @param w width of the image.
-	 * @param h height of the image.
-	 * @param d depth of the image.
 	 */
 	private static void get4Neighborhood(final int[] neighborhood,
-		final int[][] image, final int x, final int y, final int z, final int w,
-		final int h, final int d)
+		final int[][] image, final int x, final int y, final int z, final int w, final int h, final int d)
 	{
 		final int xm1 = x - 1;
 		final int xp1 = x + 1;
@@ -1246,6 +1722,12 @@ public class ParticleCounter implements PlugIn, DialogListener {
 		neighborhood[0] = getPixel(image, x - 1, y, z, w, h, d);
 		neighborhood[1] = getPixel(image, x, y - 1, z, w, h, d);
 	}
+	
+	private static void get1Neighborhood(final int[] neighborhood,
+		final int[][] image, final int x, final int y, final int z, final int w)
+	{
+		neighborhood[0] = image[z - 1][x + y * w];
+	}
 
 
 	/**
@@ -1264,6 +1746,24 @@ public class ParticleCounter implements PlugIn, DialogListener {
 		final int z, final int w, final int h, final int d)
 	{
 		if (withinBounds(x, y, z, w, h, d)) return image[z][x + y * w];
+
+		return 0;
+	}
+	
+	/**
+	 * Get pixel in slice of image (0 border conditions)
+	 *
+	 * @param image 3D image
+	 * @param x x- coordinate
+	 * @param y y- coordinate
+	 * @param z z- coordinate (in image stacks the indexes start at 1)
+	 * @param w width of the image, needed for calculating row index
+	 * @return corresponding pixel (0 if out of image)
+	 */
+	private static int getPixel(final int[][] image, final int x, final int y, final int z,
+		final int w)
+	{
+		if (withinBounds(x, y)) return image[z][x + y * w];
 
 		return 0;
 	}
@@ -1305,18 +1805,17 @@ public class ParticleCounter implements PlugIn, DialogListener {
 	{
 		return (m >= 0 && n >= 0);
 	}
+	
 
-	/**
-	 * Gets number of chunks needed to divide a stack into evenly-sized sets of
-	 * slices.
-	 *
-	 * @param imp input image
-	 * @param slicesPerChunk number of slices per chunk
-	 * @return number of chunks
-	 */
-	private static int getNChunks(final ImagePlus imp, final int slicesPerChunk) {
-		final double d = imp.getImageStackSize();
-		return (int) Math.ceil(d / slicesPerChunk);
+	private static int getMinTag(final int[] neighbourhood, final int ID) {
+		final int l = neighbourhood.length;
+		int minTag = ID;
+		for (int i = 0; i < l; i++) {
+			final int tagv = neighbourhood[i];
+			if (tagv == 0) continue;
+			if (tagv < minTag) minTag = tagv;
+		}
+		return minTag;
 	}
 	
 //TODO------------ANALYSIS---------REMOVE-TO-OWN-CLASS-------------------------
@@ -1336,6 +1835,7 @@ public class ParticleCounter implements PlugIn, DialogListener {
 		
 		//make a list of all the particle sizes with 
 		//index = particle value
+		//need to handle the ID offset for the chunks
 		AtomicInteger an = new AtomicInteger(0);
 		final long[][] partSizes = new long[d][];
 		
@@ -1346,7 +1846,10 @@ public class ParticleCounter implements PlugIn, DialogListener {
 					final long[] particleSizes = new long[maxParticle + 1];
 					final int[] slice = particleLabels[z];
 					for (int i = 0; i < wh; i++) {
-						particleSizes[slice[i]]++;
+						final int label = slice[i];
+						//hack to avoid AIOOB
+						if (label <= maxParticle)
+							particleSizes[label]++;
 					}
 					partSizes[z] = particleSizes;
 				}
@@ -2305,9 +2808,9 @@ public class ParticleCounter implements PlugIn, DialogListener {
 			stack);
 		impParticles.setCalibration(imp.getCalibration());
 		impParticles.getProcessor().setMinAndMax(0, max);
-		if (max > Math.pow(2, 24)) IJ.error("Warning",
-			"More than 16777216 (2^24) particles./n/n" +
-				"Particle image labels are inaccurate above this number.");
+		if (max > MAX_LABEL) IJ.error("Warning",
+			"More than 2^23 particles. " +
+				"Particle label display is imprecise above this number due to int to float conversion.");
 		return impParticles;
 	}
 
