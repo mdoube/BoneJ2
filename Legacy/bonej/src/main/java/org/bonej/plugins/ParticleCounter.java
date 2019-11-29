@@ -622,6 +622,8 @@ public class ParticleCounter implements PlugIn, DialogListener {
 		//set up the threads (one thread per chunk)
 		final Thread[] threads = new Thread[nChunks];
 		
+		final long stackIterationStart = System.nanoTime();
+		
 		for (int thread = 0; thread < nChunks; thread++) {
 			//each chunk is processed in a single thread
 			final int chunk = thread;
@@ -634,6 +636,7 @@ public class ParticleCounter implements PlugIn, DialogListener {
 				//label image IDs have the chunk ID offset
 				int ID = IDoffset;
 				
+				//zero is reserved for background
 				if (ID == 0) ID = 1;
 				
 				final int startSlice = startSlices[chunk];
@@ -771,6 +774,8 @@ public class ParticleCounter implements PlugIn, DialogListener {
 		}
 		Multithreader.startAndJoin(threads);
 		
+		final long chunkLabellingFinishedTime = System.nanoTime();
+		
 		//find neighbours in the previous chunk
 		//this will result in occasional HashSet values less than 
 		//the chunk's IDoffset, which indicate linkage between chunks
@@ -819,6 +824,11 @@ public class ParticleCounter implements PlugIn, DialogListener {
 		}
 		Multithreader.startAndJoin(stitchingThreads);
 				
+		final long stitchChunkFinishedTime = System.nanoTime();
+		
+		IJ.log("Finished chunk labelling in "+((chunkLabellingFinishedTime - stackIterationStart)/1E6+" ms"));
+		IJ.log("Finished inter-chunk labelling in "+((stitchChunkFinishedTime - chunkLabellingFinishedTime)/1E6+" ms"));
+		
 		int labelCount = 0;
 		
  	  //snowball the HashSets, handling the chunk offsets and indexes
@@ -979,8 +989,14 @@ public class ParticleCounter implements PlugIn, DialogListener {
 			lut[chunk] = chunkLut;
 		}
 		
+		final long finishedLUTCreation = System.nanoTime();
+		IJ.log("Finished LUT creation in "+((finishedLUTCreation - stitchChunkFinishedTime)/(long)1E6+" ms"));
+		
 		//rewrite the pixel values using the LUT
 		applyLUT(particleLabels, lut, chunkIDOffsets, startSlices, w, h, nSlices);
+		
+		final long finishedApplyingLUT = System.nanoTime();
+		IJ.log("Finished applying LUT in "+((finishedApplyingLUT - finishedLUTCreation)/(long)1E6+" ms"));
 		
 		return particleLabels;
 	}
@@ -1847,9 +1863,7 @@ public class ParticleCounter implements PlugIn, DialogListener {
 					final int[] slice = particleLabels[z];
 					for (int i = 0; i < wh; i++) {
 						final int label = slice[i];
-						//hack to avoid AIOOB
-						if (label <= maxParticle)
-							particleSizes[label]++;
+						particleSizes[label]++;
 					}
 					partSizes[z] = particleSizes;
 				}
