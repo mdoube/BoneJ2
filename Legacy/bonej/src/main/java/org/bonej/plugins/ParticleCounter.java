@@ -769,7 +769,7 @@ public class ParticleCounter implements PlugIn, DialogListener {
 						}
 					}
 				}
-				nChunkParticles[chunk] = ID - IDoffset;
+				nChunkParticles[chunk] = chunkMap.size();
 			});
 		}
 		Multithreader.startAndJoin(threads);
@@ -829,164 +829,76 @@ public class ParticleCounter implements PlugIn, DialogListener {
 		IJ.log("Finished chunk labelling in "+((chunkLabellingFinishedTime - stackIterationStart)/1E6+" ms"));
 		IJ.log("Finished inter-chunk labelling in "+((stitchChunkFinishedTime - chunkLabellingFinishedTime)/1E6+" ms"));
 		
-		int labelCount = 0;
-		
- 	  //snowball the HashSets, handling the chunk offsets and indexes
-		//iterate backwards through the chunk maps
-		
-		boolean somethingChanged = true;
-		while (somethingChanged) {
-			somethingChanged = false;
-			for (int chunk = nChunks - 1; chunk >= 0 ; chunk--) {
-				final ArrayList<HashSet<Integer>> map = chunkMaps.get(chunk);
-				final int IDoffset = chunkIDOffsets[chunk];
-				for (int i = map.size() - 1; i >= 0; i--) {
-					final HashSet<Integer> set = map.get(i);
-					if (!set.isEmpty()) {
-						//find the minimum label in the set
-						int minLabel = Integer.MAX_VALUE;
-						for (Integer label : set) {
-							if (label < minLabel)
-								minLabel = label;
-						}
-						
-						//if minimum label is less than this chunk's offset, need
-						//to move set to previous chunk's map
-						if (minLabel < IDoffset) {
-							final ArrayList<HashSet<Integer>> priorMap = chunkMaps.get(chunk - 1);
-							final int priorIDoffset = chunkIDOffsets[chunk - 1];
-							//IJ.log("Found label = "+minLabel+" in map = "+chunk+" set = "+i+", moving to map = "+(chunk-1)+" set = "+(minLabel - priorIDoffset));
-							priorMap.get(minLabel - priorIDoffset).addAll(set);
-							set.clear();
-							somethingChanged = true;
-							break;
-						}
-						//move whole set's contents to a lower position in the map
-						if (minLabel < i + IDoffset) {
-							//IJ.log("Found label = "+minLabel+" in map = "+chunk+" set = "+i+", moving to set = "+(minLabel - IDoffset));
-							map.get(minLabel - IDoffset).addAll(set);
-							set.clear();
-							somethingChanged = true;
-							break;
-						}
-					}
-				}
-			}
-
-			//count unique labels and particles
-			labelCount = 0;
-			nParticles = 0;
-			for (ArrayList<HashSet<Integer>> map : chunkMaps) {
-				for (HashSet<Integer> set : map) {
-					if (!set.isEmpty()) {
-						labelCount += set.size();
-						nParticles++;
-					}
-				}
-			}
-		}
-
-		//set up a 1D HashMap of HashSets with the minimum label
-		//set as the 'root' (key) of the hashMap
-		HashMap<Integer, HashSet<Integer>> hashMap = new HashMap<>(labelCount);
-		for (ArrayList<HashSet<Integer>> map : chunkMaps) {
-			for (HashSet<Integer> set : map) {
-				int root = Integer.MAX_VALUE;
-				for (Integer label : set) {
-					if (label < root)
-						root = label;
-				}
-				hashMap.put(root, set);
-			}
-		}
-		
-		//set up a LUT to keep track of the minimum replacement value for each label
-		final HashMap<Integer, Integer> lutMap = new HashMap<>(labelCount);
-		for (ArrayList<HashSet<Integer>> map : chunkMaps) {
-			for (HashSet<Integer> set : map) {
-				for (Integer label : set)
-					//start so that each label looks up itself
-					lutMap.put(label, label);
-			}
-		}
-
-		//check the hashMap for duplicate appearances and merge sets downwards
-		somethingChanged = true;
-		while (somethingChanged) {
-			somethingChanged = false;
-			Iterator<Map.Entry<Integer, HashSet<Integer>>> it = hashMap.entrySet().iterator();
-			while (it.hasNext()) {
-				Map.Entry<Integer, HashSet<Integer>> pair = it.next();
-				HashSet<Integer> set = pair.getValue();
-				int key = pair.getKey();
-				for (Integer label : set) {
-					int lutValue = lutMap.get(label);
-					//lower the lut lookup value to the root of this set
-					if (lutValue > key) {
-						lutMap.put(label, key);
-						somethingChanged = true;
-					}
-					//looks like there is a value in the wrong place
-					if (lutValue < key) {
-						//move all the set's labels to the lower root
-						hashMap.get(lutValue).addAll(set);
-						//update all the set's lut lookups with the new root
-						for (Integer l : set) {
-							lutMap.put(l, lutValue);
-							//IJ.log("Updating lut label "+l+" with lookup value "+lutValue); 
-						}
-						set.clear();
-						somethingChanged = true;
-						break;
-					}
-				}
-			}
-		}
-		
-		//count number of unique values in the LUT
-		HashSet<Integer> lutValues = new HashSet<>();
-		Iterator<Map.Entry<Integer, Integer>> itL = lutMap.entrySet().iterator();
-		while (itL.hasNext()) {
-			Map.Entry<Integer, Integer> pair = itL.next();
-			lutValues.add(pair.getValue());
-		}
-		final int nLabels = lutValues.size();
-		
-		//assign incremental replacement values
-		//translate old 
-		final HashMap<Integer, Integer> lutLut = new HashMap<>(nLabels);
-		int value = 1;
-		for (Integer lutValue : lutValues) {
-			if (lutValue == 0) {
-				lutLut.put(0, 0);
-				continue;
-			}
-			lutLut.put(lutValue, value);
-			value++;
-		}
-		
-		//lutLut now contains mapping from the old lut value (the lutLut 'key') to the
-		//new lut value (lutLut 'value')
-		
-		Iterator<Map.Entry<Integer, Integer>> itR = lutMap.entrySet().iterator();
-		while (itR.hasNext()) {
-			Map.Entry<Integer, Integer> pair = itR.next();
-			Integer oldLutValue = pair.getValue();
-			Integer newLutValue = lutLut.get(oldLutValue);
-			pair.setValue(newLutValue);
-		}
-		
-		//translate the HashMap LUT to a chunkwise LUT, to be used in combination
-		//with the IDoffsets.
+		//set up a lut for each chunk and group labels within chunks
+		//can be multithreaded by chunk (no chunk-chunk interaction)
 		int[][] lut = new int[nChunks][];
 		for (int chunk = 0; chunk < nChunks; chunk++) {
 			final int nChunkLabels = nChunkParticles[chunk];
 			final int IDoffset = chunkIDOffsets[chunk];
 			int[] chunkLut = new int[nChunkLabels];
 			for (int i = 0; i < nChunkLabels; i++) {
-				chunkLut[i] = lutMap.get(i + IDoffset);
+				//starting position is to self-refer
+				chunkLut[i] = i + IDoffset;
 			}
-			lut[chunk] = chunkLut;
+			final ArrayList<HashSet<Integer>> map = chunkMaps.get(chunk);
+			boolean findFirst = true;
+			boolean minimise = true;
+			boolean merge = true;
+			while (findFirst && minimise && merge) {
+				IJ.showStatus("Minimising labels in chunk = "+chunk);
+				findFirstAppearance(chunkLut, map, IDoffset);
+				lut[chunk] = chunkLut;
+
+				//find the minimal lut values in the lut value chain
+				minimiseLutArray(chunkLut, IDoffset);
+
+				//merge HashSets according to the LUT
+				mergeLabelNeighbourhoods(chunkLut, map, IDoffset);
+			}
+		}
+		//should now have minimised chunkLuts, need to merge between chunks 
+		
+		//find previous chunk labels and move to previous chunks
+		//don't process the 0th chunk (it has no previous chunk to merge with)
+		for (int chunk = nChunks - 1; chunk > 0; chunk--) {
+			final ArrayList<HashSet<Integer>> map = chunkMaps.get(chunk);
+			final ArrayList<HashSet<Integer>> previousMap = chunkMaps.get(chunk);
+			final int[] chunkLut = lut[chunk];
+			final int[] previousChunkLut = lut[chunk - 1];
+			final int IDoffset = chunkIDOffsets[chunk];
+			final int previousIDoffset = chunkIDOffsets[chunk - 1];
+			for (HashSet<Integer> set : map) {
+				if (set.isEmpty()) continue;
+				//get the minimum label in this set
+				int minLabel = Integer.MAX_VALUE;
+				for (Integer label : set) {
+					if (label < minLabel)
+						minLabel = label;
+				}
+				//this set contains at least one label from the previous chunk
+				if (minLabel < IDoffset) {
+					final int previousIndex = minLabel - previousIDoffset;
+					//find the minimal location of the previous chunk label
+					final int previousLutValue = previousChunkLut[previousIndex];
+					//get a reference to the location indicated by the previousChunkLut
+					final HashSet<Integer> previousSet = previousMap.get(previousLutValue - previousIDoffset);
+					//update all the labeĺs' lut values and move them to the previousSet
+					for (Integer label : set) {
+						//there might be one or more bigger labels from the previous chunk
+						//than the minimum label. Have to give them the lut value from the
+						//smaller previous chunk label
+						//possible I guess that the lut value of the bigger label is smaller than the
+						//lut value of the smaller label - not currently handled properly
+						if (label < IDoffset) {
+							previousChunkLut[label - previousIDoffset] = previousLutValue;
+						} else {
+							chunkLut[label - IDoffset] = previousLutValue;
+						}
+						previousSet.add(label);
+					}
+					set.clear();
+				}
+			}
 		}
 		
 		final long finishedLUTCreation = System.nanoTime();
@@ -1001,6 +913,73 @@ public class ParticleCounter implements PlugIn, DialogListener {
 		return particleLabels;
 	}
 
+	/**
+	 * Move HashSets' labels to the index indicated by the lut
+	 * 
+	 * @param chunkLut
+	 * @param map
+	 * @param iDoffset
+	 * @return true if something changed, false if there was nothing to do.
+	 */
+	private static boolean mergeLabelNeighbourhoods(int[] lut,
+		ArrayList<HashSet<Integer>> map, int IDoffset)
+	{
+		boolean changed = false;
+		for (int i = map.size() - 1; i >= 0; i--) {
+			final HashSet<Integer> set = map.get(i);
+			if (set.isEmpty()) continue;
+			//find the smallest lut value for this set's labels
+			int minLutValue = Integer.MAX_VALUE;
+			for (Integer label : set) {
+				//skip labels from previous chunk
+				//(we will deal with them later during chunk stitching)
+				if (label < IDoffset) continue;
+				final int lutValue = lut[label - IDoffset];
+				if (lutValue < minLutValue)
+					minLutValue = lutValue;					
+			}
+		  //set is already in its minimum lut value
+			//go to the next one
+			if (minLutValue - IDoffset == i)
+				continue;
+				
+			//move all the set's values, updating the lut as we go
+			final HashSet<Integer> newSet = map.get(minLutValue - IDoffset);
+			for (Integer label : set) {
+				newSet.add(label);
+				if (label >= IDoffset)
+					lut[label - IDoffset] = minLutValue;
+				changed = true;
+			}
+			set.clear();
+		}
+		return changed;
+	}
+
+
+	/** 
+	 * Count unique labels
+	 * 
+	 * also updates nParticles field.
+	 * 
+	 * @param chunkMaps
+	 * @return number of unique labels
+	 */
+	private static int countLabels(final ArrayList<ArrayList<HashSet<Integer>>> chunkMaps) {
+		int labelCount = 0;
+		nParticles = 0;
+		for (ArrayList<HashSet<Integer>> map : chunkMaps) {
+			for (HashSet<Integer> set : map) {
+				if (!set.isEmpty()) {
+					labelCount += set.size();
+					nParticles++;
+				}
+			}
+		}
+		return labelCount;
+	}
+	
+	
 	private static void joinMappedStructures(final ImagePlus imp,
 			final int[][] particleLabels, final int phase)
 		{
@@ -1236,6 +1215,36 @@ public class ParticleCounter implements PlugIn, DialogListener {
 			}
 			return changed;
 		}
+		
+		/**
+		 * 
+		 * @param lut
+		 * @param IDoffset
+		 * @return
+		 */
+		private static boolean minimiseLutArray(final int[] lut, final int IDoffset) {
+			final int l = lut.length;
+			boolean changed = false;
+			for (int key = 0; key < l; key++) {
+				int label = lut[key];
+				// this is a root
+				if (label - IDoffset == key) {
+					IJ.log("Found a root, label = "+label);
+					continue;
+				}
+				// otherwise update the current key with the
+				// value from the referred key
+				//recursively search for the minimum connected 
+				//lut value (closest to a root)
+				while (lut[label - IDoffset] != label) {
+					//may need to break this while
+					label = lut[lut[label - IDoffset]];
+				}
+				lut[key] = label;
+				changed = true;
+			}
+			return changed;
+		}
 
 	 /**
 		 * Iterate backwards over map entries, moving set values to their new lut
@@ -1464,6 +1473,41 @@ public class ParticleCounter implements PlugIn, DialogListener {
 				// update lut with current position
 				if (lut[val] > i) {
 					lut[val] = i;
+					changed = true;
+				}
+			}
+		}
+		return changed;
+	}
+	
+	/**
+	 * Update the lut with the lowest map index (with offset) in which each label appears
+	 * @param lut
+	 * @param map
+	 * @return true if the lut is changed
+	 */
+	private static boolean findFirstAppearance(final int[] lut,
+		final List<HashSet<Integer>> map, final int IDoffset)
+	{
+		final int l = map.size();
+		boolean changed = false;
+		for (int i = 0; i < l; i++) {
+			final HashSet<Integer> set = map.get(i);
+			for (final Integer label : set) {
+				// if the current lut value is greater
+				// than the current position
+				// update lut with current position
+				final int index = label - IDoffset;
+//				IJ.log("label = "+label);
+//				IJ.log("IDoffset = "+IDoffset);
+//				IJ.log("index = "+index);
+//				IJ.log("lut length = "+lut.length);
+//				IJ.log("map size = "+map.size());
+				//skip values that will be moved to the prior
+				//chunkLut and self-referring values
+				if (index >= 0 && lut[index] > i + IDoffset) {
+					//replace the lut value with the lowest root label
+					lut[index] = i + IDoffset;
 					changed = true;
 				}
 			}
