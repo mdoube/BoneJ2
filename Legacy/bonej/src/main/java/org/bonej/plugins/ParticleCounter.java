@@ -503,13 +503,11 @@ public class ParticleCounter implements PlugIn, DialogListener {
 		
 		//first pass through whole stack
 		final int[][] particleLabels = firstIDAttribution(imp, workArray, phase);
-		
-//		joinMappedStructures(imp, particleLabels, phase);
 
 		filterParticles(imp, workArray, particleLabels, minVol, maxVol, phase);
 		
 		if (doExclude) excludeOnEdges(imp, particleLabels, workArray);
-//		minimiseLabels(particleLabels);
+
 		final long[] particleSizes = getParticleSizes(particleLabels);
 		return new Object[] { workArray, particleLabels, particleSizes };
 	}
@@ -570,19 +568,14 @@ public class ParticleCounter implements PlugIn, DialogListener {
 				nSlices < minSlicesPerChunk * nProcessors ?
 				(int) Math.ceil((double) nSlices / (double) minSlicesPerChunk) :
 				nProcessors;
-		//IJ.log("nSlices = "+nSlices);
-		//IJ.log("nChunks = "+nChunks);
 		
 		//set up chunk sizes - last chunk is the remainder
 		final int slicesPerChunk = (int) Math.ceil((double) nSlices / (double) nChunks);
-		
-		//IJ.log("slicesPerChunk = "+slicesPerChunk);
 		
 		//set up start slice array
 		final int[] startSlices = new int[nChunks];
 		for (int i = 0; i < nChunks; i++) {
 			startSlices[i] = i * slicesPerChunk;
-			//IJ.log("startSlices["+i+"] = "+startSlices[i]);
 		}
 		
 		
@@ -591,7 +584,6 @@ public class ParticleCounter implements PlugIn, DialogListener {
 		final int[] chunkIDOffsets = new int[nChunks];
 		for (int i = 0; i < nChunks; i++) {
 			chunkIDOffsets[i] = i * chunkLabelSpace;
-			//IJ.log("chunkIDOffsets["+i+"] = "+chunkIDOffsets[i]);
 		}
 			
 		//set up a map split into one per chunk
@@ -600,13 +592,11 @@ public class ParticleCounter implements PlugIn, DialogListener {
 			//assume there is a new particle label for every 10000 pixels
 			final int initialArrayCapacity = 1 + w * h * slicesPerChunk / 10000;
 			final ArrayList<HashSet<Integer>> map = new ArrayList<>(initialArrayCapacity);
-			//IJ.log("Created a new map with initial capacity of "+initialArrayCapacity);
 			final int initialHashSetCapacity = 1;
 			final int IDoffset = chunkIDOffsets[chunk];
 			for (int j = 0; j < initialArrayCapacity; j++) {
 				//create a new set containing a single value of j + IDoffset (the root) 
 				final HashSet<Integer> set = new HashSet<>(initialHashSetCapacity);
-				//IJ.log("Created a new set with initial capacity of "+initialHashSetCapacity+" and intial value of "+(j+IDoffset));
 				set.add(j + IDoffset);
 				map.add(set);
 			}
@@ -666,7 +656,6 @@ public class ParticleCounter implements PlugIn, DialogListener {
 								// increment the particle label
 								if (minTag == ID) {
 									ID++;
-									//IJ.log("ID incremented to "+ID);
 									expandMap(chunkMap, ID, IDoffset);
 								}
 							}
@@ -697,7 +686,6 @@ public class ParticleCounter implements PlugIn, DialogListener {
 									// increment the particle label
 									if (minTag == ID) {
 										ID++;
-										//IJ.log("ID incremented to "+ID);
 										expandMap(chunkMap, ID, IDoffset);
 									}
 								}
@@ -846,7 +834,6 @@ public class ParticleCounter implements PlugIn, DialogListener {
 						//if minimum label is less than this chunk's offset, need
 						//to move set to previous chunk's map
 						if (minLabel < IDoffset) {
-							//IJ.log("Found label = "+minLabel+" in map = "+chunk+" set = "+i+", moving to map = "+(chunk-1)+" set = "+(minLabel - priorIDoffset));
 							priorMap.get(minLabel - priorIDoffset).addAll(set);
 							set.clear();
 							somethingChanged = true;
@@ -854,7 +841,6 @@ public class ParticleCounter implements PlugIn, DialogListener {
 						}
 						//move whole set's contents to a lower position in the map
 						if (minLabel < i + IDoffset) {
-							//IJ.log("Found label = "+minLabel+" in map = "+chunk+" set = "+i+", moving to set = "+(minLabel - IDoffset));
 							map.get(minLabel - IDoffset).addAll(set);
 							set.clear();
 							somethingChanged = true;
@@ -926,7 +912,6 @@ public class ParticleCounter implements PlugIn, DialogListener {
 						//update all the set's lut lookups with the new root
 						for (Integer l : set) {
 							lutMap.put(l, lutValue);
-							//IJ.log("Updating lut label "+l+" with lookup value "+lutValue); 
 						}
 						set.clear();
 						somethingChanged = true;
@@ -1008,7 +993,6 @@ public class ParticleCounter implements PlugIn, DialogListener {
 		private static void expandMap(final List<HashSet<Integer>> map,
 			final int ID, final int IDoffset) {
 			while (ID - IDoffset >= map.size()) {
-				//IJ.log("Map is too small ("+map.size()+"). Adding a new set with root value = "+(map.size()+IDoffset));
 				final HashSet<Integer> set = new HashSet<>();
 				set.add(map.size() + IDoffset);
 				map.add(set);
