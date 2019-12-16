@@ -557,7 +557,7 @@ public class ParticleCounter implements PlugIn, DialogListener {
 	private int[][] firstIDAttribution(final ImagePlus imp,
 		final byte[][] workArray, final int phase)
 	{
-
+		final long startTime = System.nanoTime();
 		final int w = imp.getWidth();
 		final int h = imp.getHeight();
 		final int nSlices = imp.getImageStackSize();
@@ -819,9 +819,10 @@ public class ParticleCounter implements PlugIn, DialogListener {
 		}
 		Multithreader.startAndJoin(stitchingThreads);
 				
-		int labelCount = 0;
+		final long labellingCompleteTime = System.nanoTime();
+		IJ.log("First labelling complete in "+((labellingCompleteTime - startTime)/1000000)+" ms");
 		
- 	  //snowball the HashSets, handling the chunk offsets and indexes
+ 	    //snowball the HashSets, handling the chunk offsets and indexes
 		//iterate backwards through the chunk maps
 		
 		boolean somethingChanged = true;
@@ -829,7 +830,10 @@ public class ParticleCounter implements PlugIn, DialogListener {
 			somethingChanged = false;
 			for (int chunk = nChunks - 1; chunk >= 0 ; chunk--) {
 				final ArrayList<HashSet<Integer>> map = chunkMaps.get(chunk);
+				final int priorChunk = chunk > 0 ? chunk - 1 : 0;
+				final ArrayList<HashSet<Integer>> priorMap = chunkMaps.get(priorChunk);
 				final int IDoffset = chunkIDOffsets[chunk];
+				final int priorIDoffset = chunkIDOffsets[priorChunk];
 				for (int i = map.size() - 1; i >= 0; i--) {
 					final HashSet<Integer> set = map.get(i);
 					if (!set.isEmpty()) {
@@ -839,17 +843,14 @@ public class ParticleCounter implements PlugIn, DialogListener {
 							if (label < minLabel)
 								minLabel = label;
 						}
-						
 						//if minimum label is less than this chunk's offset, need
 						//to move set to previous chunk's map
 						if (minLabel < IDoffset) {
-							final ArrayList<HashSet<Integer>> priorMap = chunkMaps.get(chunk - 1);
-							final int priorIDoffset = chunkIDOffsets[chunk - 1];
 							//IJ.log("Found label = "+minLabel+" in map = "+chunk+" set = "+i+", moving to map = "+(chunk-1)+" set = "+(minLabel - priorIDoffset));
 							priorMap.get(minLabel - priorIDoffset).addAll(set);
 							set.clear();
 							somethingChanged = true;
-							break;
+							continue;
 						}
 						//move whole set's contents to a lower position in the map
 						if (minLabel < i + IDoffset) {
@@ -857,25 +858,27 @@ public class ParticleCounter implements PlugIn, DialogListener {
 							map.get(minLabel - IDoffset).addAll(set);
 							set.clear();
 							somethingChanged = true;
-							break;
+							continue;
 						}
 					}
 				}
 			}
+		}
+		final long snowballingCompleteTime = System.nanoTime();
+		IJ.log("Snowballing complete in "+((snowballingCompleteTime - labellingCompleteTime)/1000000)+" ms");
 
-			//count unique labels and particles
-			labelCount = 0;
-			nParticles = 0;
-			for (ArrayList<HashSet<Integer>> map : chunkMaps) {
-				for (HashSet<Integer> set : map) {
-					if (!set.isEmpty()) {
-						labelCount += set.size();
-						nParticles++;
-					}
+		//count unique labels and particles
+		int labelCount = 0;
+		nParticles = 0;
+		for (ArrayList<HashSet<Integer>> map : chunkMaps) {
+			for (HashSet<Integer> set : map) {
+				if (!set.isEmpty()) {
+					labelCount += set.size();
+					nParticles++;
 				}
 			}
 		}
-
+		
 		//set up a 1D HashMap of HashSets with the minimum label
 		//set as the 'root' (key) of the hashMap
 		HashMap<Integer, HashSet<Integer>> hashMap = new HashMap<>(labelCount);
@@ -942,6 +945,9 @@ public class ParticleCounter implements PlugIn, DialogListener {
 		}
 		final int nLabels = lutValues.size();
 		
+		final long hashMappingCompleteTime = System.nanoTime();
+		IJ.log("Hashmapping complete in "+((hashMappingCompleteTime - snowballingCompleteTime)/1000000)+" ms");
+		
 		//assign incremental replacement values
 		//translate old 
 		final HashMap<Integer, Integer> lutLut = new HashMap<>(nLabels);
@@ -979,8 +985,14 @@ public class ParticleCounter implements PlugIn, DialogListener {
 			lut[chunk] = chunkLut;
 		}
 		
+		final long lutCreationTime = System.nanoTime();
+		IJ.log("LUT creation complete in "+((lutCreationTime - hashMappingCompleteTime)/1000000)+" ms");
+		
 		//rewrite the pixel values using the LUT
 		applyLUT(particleLabels, lut, chunkIDOffsets, startSlices, w, h, nSlices);
+		
+		final long lutAppliedTime = System.nanoTime();
+		IJ.log("LUT applied in "+((lutAppliedTime - lutCreationTime)/1000000)+" ms");
 		
 		return particleLabels;
 	}
