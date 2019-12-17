@@ -606,9 +606,6 @@ public class ParticleCounter implements PlugIn, DialogListener {
 		//set up the particle label stack
 		final int[][] particleLabels = new int[nSlices][wh];
 		
-		//set up a count of labels per chunk
-		final int[] nChunkParticles = new int[nChunks];
-		
 		//set up the threads (one thread per chunk)
 		final Thread[] threads = new Thread[nChunks];
 		
@@ -754,7 +751,8 @@ public class ParticleCounter implements PlugIn, DialogListener {
 						}
 					}
 				}
-				nChunkParticles[chunk] = ID - IDoffset;
+//				//there is always one too many IDs per chunk, so trim the last one off
+				chunkMap.remove(chunkMap.size() - 1);
 			});
 		}
 		Multithreader.startAndJoin(threads);
@@ -961,7 +959,7 @@ public class ParticleCounter implements PlugIn, DialogListener {
 		//with the IDoffsets.
 		int[][] lut = new int[nChunks][];
 		for (int chunk = 0; chunk < nChunks; chunk++) {
-			final int nChunkLabels = nChunkParticles[chunk];
+			final int nChunkLabels = chunkMaps.get(chunk).size();
 			final int IDoffset = chunkIDOffsets[chunk];
 			int[] chunkLut = new int[nChunkLabels];
 			for (int i = 0; i < nChunkLabels; i++) {
