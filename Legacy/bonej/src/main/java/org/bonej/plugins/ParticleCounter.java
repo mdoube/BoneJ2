@@ -68,45 +68,13 @@ import marchingcubes.MCTriangulator;
 
 /**
  * <p>
- * This class implements multithreaded and linear O(n) 3D particle
- * identification and shape analysis. Surface meshing and 3D visualisation are
- * provided by Bene Schmid's ImageJ 3D Viewer.
- * </p>
- * <p>
- * This plugin is based on Object_Counter3D by Fabrice P Cordelires and Jonathan
- * Jackson, but with significant speed increases through reduction of recursion
- * and multi-threading. Thanks to Robert Barbour for the suggestion to 'chunk'
- * the stack. Chunking works as follows:
- * </p>
- * <ol>
- * <li>Perform initial labelling on the whole stack in a single thread</li>
- * <li>for <i>n</i> discrete, contiguous chunks within the labelling array,
- * connectStructures()
- * <ol type="a">
- * <li>connectStructures() can run in a separate thread for each chunk</li>
- * <li>chunks are approximately equal-sized sets of slices</li>
- * </ol>
- * <li>stitchChunks() for the pixels on the first slice of each chunk, except
- * for the first chunk, restricting replaceLabels() to the current and all
- * previous chunks.
- * <ol type="a">
- * <li>stitchChunks() iterates through the slice being stitched in a single
- * thread</li>
- * </ol>
- * </li>
- * </ol>
- * <p>
- * The performance improvement should be in the region of a factor of <i>n</i>
- * if run linearly, and if multithreaded over <i>c</i> processors, speed
- * increase should be in the region of <i>n</i> * <i>c</i>, minus overhead.
+ * This class implements mutithreaded linear O(n) 3D particle
+ * identification and shape analysis. It is a two-pass connected components labelling
+ * algorithm, which uses reduction of a neighbour network to generate a lut.
+ * Processing time increases linearly with number of pixels.
  * </p>
  *
  * @author Michael Doube
- * @author Jonathan Jackson
- * @author Fabrice Cordelires
- * @author Michał Kłosowski
- * @see <a href="http://rsbweb.nih.gov/ij/plugins/track/objects.html">3D Object
- *      Counter</a>
  */
 public class ParticleCounter implements PlugIn, DialogListener {
 
@@ -125,6 +93,8 @@ public class ParticleCounter implements PlugIn, DialogListener {
 	/** number of particle labels */
 	private static int nParticles;
 
+//TODO -- Run method & GUI (userland class)
+	
 	@Override
 	public boolean dialogItemChanged(final GenericDialog gd, final AWTEvent e) {
 		if (DialogModifier.hasInvalidNumber(gd.getNumericFields())) return false;
@@ -440,7 +410,8 @@ public class ParticleCounter implements PlugIn, DialogListener {
 		UsageReporter.reportEvent(this).send();
 	}
 	
-
+	//TODO--------Connected components labelling
+	
 	/**
 	 * Get particles, particle labels and particle sizes from a 3D ImagePlus
 	 *
@@ -461,6 +432,13 @@ public class ParticleCounter implements PlugIn, DialogListener {
 			doExclude);
 	}
 
+	/**
+	 * Get particles, particle labels and particle sizes from a 3D ImagePlus
+	 *  
+	 * @param imp
+	 * @param phase
+	 * @return
+	 */
 	Object[] getParticles(final ImagePlus imp, final int phase)
 	{
 		final byte[][] workArray = makeWorkArray(imp);
@@ -468,6 +446,14 @@ public class ParticleCounter implements PlugIn, DialogListener {
 			Double.POSITIVE_INFINITY, phase, false);
 	}
 
+	/**
+	 * Get particles, particle labels and particle sizes from a 3D ImagePlus
+	 * 
+	 * @param imp
+	 * @param workArray
+	 * @param phase
+	 * @return
+	 */
 	Object[] getParticles(final ImagePlus imp, final byte[][] workArray, final int phase)
 	{
 		return getParticles(imp, workArray, 0.0,
@@ -511,8 +497,6 @@ public class ParticleCounter implements PlugIn, DialogListener {
 		final long[] particleSizes = getParticleSizes(particleLabels);
 		return new Object[] { workArray, particleLabels, particleSizes };
 	}
-
-//TODO--------Connected components labelling
 	
 	/**
 	 * Create a work array
@@ -1202,7 +1186,7 @@ public class ParticleCounter implements PlugIn, DialogListener {
 		
 		neighborhood[3] = getPixel(image, xm1, y, z, w, h, d);
 	}
-		
+	
 	private static void get3Neighborhood(final int[] neighborhood,
 		final int[][] image, final int x, final int y, final int z, final int w,
 		final int h, final int d)
