@@ -349,15 +349,15 @@ public class Purify implements PlugIn {
 		final byte[][] workArray = (byte[][]) foregroundParticles[0];
 		int[][] particleLabels = (int[][]) foregroundParticles[1];
 		// index 0 is background particle's size...
-		long[] particleSizes = pc.getParticleSizes(particleLabels);
+		long[] particleSizes = ParticleAnalyser.getParticleSizes(particleLabels);
 		removeSmallParticles(workArray, particleLabels, particleSizes, fg);
 
 		final int bg = ParticleCounter.BACK;
 		final Object[] backgroundParticles = pc.getParticles(imp, workArray, bg);
 		particleLabels = (int[][]) backgroundParticles[1];
-		particleSizes = pc.getParticleSizes(particleLabels);
+		particleSizes = ParticleAnalyser.getParticleSizes(particleLabels);
 		touchEdges(imp, workArray, particleLabels, particleSizes);
-		particleSizes = pc.getParticleSizes(particleLabels);
+		particleSizes = ParticleAnalyser.getParticleSizes(particleLabels);
 		removeSmallParticles(workArray, particleLabels, particleSizes, bg);
 
 		final ImageStack stack = new ImageStack(imp.getWidth(), imp.getHeight());
