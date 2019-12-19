@@ -20,7 +20,7 @@ import ij.ImageStack;
 import ij.measure.Calibration;
 import marchingcubes.MCTriangulator;
 
-public class ParticleAnalyser {
+public class ParticleAnalysis {
 	
 	/** Foreground value */
 	static final int FORE = -1;
@@ -107,7 +107,7 @@ public class ParticleAnalyser {
 	static double[] getSurfaceAreas(
 		final Collection<List<Point3f>> surfacePoints)
 	{
-		return surfacePoints.stream().mapToDouble(ParticleAnalyser::getSurfaceArea)
+		return surfacePoints.stream().mapToDouble(ParticleAnalysis::getSurfaceArea)
 			.toArray();
 	}
 

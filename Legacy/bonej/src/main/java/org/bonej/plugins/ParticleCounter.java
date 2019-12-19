@@ -228,44 +228,44 @@ public class ParticleCounter implements PlugIn, DialogListener {
 		final int[][] particleLabels = (int[][]) result[1];
 		final long[] particleSizes = (long[]) result[2];
 		nParticles = particleSizes.length;
-		final double[] volumes = ParticleAnalyser.getVolumes(imp, particleSizes);
-		final double[][] centroids = ParticleAnalyser.getCentroids(imp, particleLabels,
+		final double[] volumes = ParticleAnalysis.getVolumes(imp, particleSizes);
+		final double[][] centroids = ParticleAnalysis.getCentroids(imp, particleLabels,
 			particleSizes);
-		final int[][] limits = ParticleAnalyser.getParticleLimits(imp, particleLabels);
+		final int[][] limits = ParticleAnalysis.getParticleLimits(imp, particleLabels);
 
 		// set up resources for analysis
 		ArrayList<List<Point3f>> surfacePoints = new ArrayList<>();
 		if (doSurfaceArea || doSurfaceVolume || doSurfaceImage || doEllipsoids ||
 			doFeret || doEllipsoidStack)
 		{
-			surfacePoints = ParticleAnalyser.getSurfacePoints(imp, particleLabels, limits, resampling);
+			surfacePoints = ParticleAnalysis.getSurfacePoints(imp, particleLabels, limits, resampling);
 		}
 		EigenvalueDecomposition[] eigens = new EigenvalueDecomposition[nParticles];
 		if (doMoments || doAxesImage || colourMode == ORIENTATION) {
-			eigens = ParticleAnalyser.getEigens(imp, particleLabels, centroids);
+			eigens = ParticleAnalysis.getEigens(imp, particleLabels, centroids);
 		}
 		// calculate dimensions
 		double[] surfaceAreas = new double[nParticles];
 		if (doSurfaceArea) {
-			surfaceAreas = ParticleAnalyser.getSurfaceAreas(surfacePoints);
+			surfaceAreas = ParticleAnalysis.getSurfaceAreas(surfacePoints);
 		}
 		double[] ferets = new double[nParticles];
 		if (doFeret) {
-			ferets = ParticleAnalyser.getFerets(surfacePoints);
+			ferets = ParticleAnalysis.getFerets(surfacePoints);
 		}
 		double[] surfaceVolumes = new double[nParticles];
 		if (doSurfaceVolume) {
-			surfaceVolumes = ParticleAnalyser.getSurfaceVolume(surfacePoints);
+			surfaceVolumes = ParticleAnalysis.getSurfaceVolume(surfacePoints);
 		}
 		double[][] eulerCharacters = new double[nParticles][3];
 		if (doEulerCharacters) {
-			eulerCharacters = ParticleAnalyser.getEulerCharacter(imp, particleLabels, limits);
+			eulerCharacters = ParticleAnalysis.getEulerCharacter(imp, particleLabels, limits);
 		}
 		double[][] thick = new double[nParticles][2];
 		if (doThickness) {
 			final LocalThickness th = new LocalThickness();
 			final ImagePlus thickImp = th.getLocalThickness(imp, false, doMask);
-			thick = ParticleAnalyser.getMeanStdDev(thickImp, particleLabels, particleSizes);
+			thick = ParticleAnalysis.getMeanStdDev(thickImp, particleLabels, particleSizes);
 			if (doThickImage) {
 				double max = 0;
 				for (int i = 1; i < nParticles; i++) {
@@ -280,7 +280,7 @@ public class ParticleCounter implements PlugIn, DialogListener {
 		}
 		Object[][] ellipsoids = new Object[nParticles][10];
 		if (doEllipsoids || doEllipsoidImage || doEllipsoidStack) {
-			ellipsoids = ParticleAnalyser.getEllipsoids(surfacePoints);
+			ellipsoids = ParticleAnalysis.getEllipsoids(surfacePoints);
 		}
 
 		// Show numerical results
@@ -486,11 +486,11 @@ public class ParticleCounter implements PlugIn, DialogListener {
 		//first pass through whole stack
 		final int[][] particleLabels = firstIDAttribution(imp, workArray, phase);
 
-		ParticleAnalyser.filterParticles(imp, workArray, particleLabels, minVol, maxVol, phase);
+		ParticleAnalysis.filterParticles(imp, workArray, particleLabels, minVol, maxVol, phase);
 		
-		if (doExclude) ParticleAnalyser.excludeOnEdges(imp, particleLabels, workArray);
+		if (doExclude) ParticleAnalysis.excludeOnEdges(imp, particleLabels, workArray);
 
-		final long[] particleSizes = ParticleAnalyser.getParticleSizes(particleLabels);
+		final long[] particleSizes = ParticleAnalysis.getParticleSizes(particleLabels);
 		return new Object[] { workArray, particleLabels, particleSizes };
 	}
 	
@@ -1542,7 +1542,7 @@ public class ParticleCounter implements PlugIn, DialogListener {
 				continue;
 			}
 			final double[] radii = (double[]) ellipsoids[el][1];
-			if (!ParticleAnalyser.isRadiiValid(radii)) {
+			if (!ParticleAnalysis.isRadiiValid(radii)) {
 				continue;
 			}
 			final double[] centre = (double[]) ellipsoids[el][0];
