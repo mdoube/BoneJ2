@@ -107,8 +107,8 @@ public class Purify implements PlugIn {
 	{
 		final int d = workArray.length;
 		final int wh = workArray[0].length;
-		final int fg = ParticleCounter.FORE;
-		final int bg = ParticleCounter.BACK;
+		final int fg = ConnectedComponents.FORE;
+		final int bg = ConnectedComponents.BACK;
 		long maxVC = 0;
 		final int nPartSizes = particleSizes.length;
 		for (int i = 1; i < nPartSizes; i++) {
@@ -343,21 +343,24 @@ public class Purify implements PlugIn {
 	{
 
 		final ParticleCounter pc = new ParticleCounter();
+		final ConnectedComponents connector = new ConnectedComponents();
 
-		final int fg = ParticleCounter.FORE;
-		final Object[] foregroundParticles = pc.getParticles(imp, fg);
+		final int fg = ConnectedComponents.FORE;
+		final Object[] foregroundParticles = pc.getParticles(connector, imp, fg);
+		final int nFgParticles = connector.getNParticles();
 		final byte[][] workArray = (byte[][]) foregroundParticles[0];
 		int[][] particleLabels = (int[][]) foregroundParticles[1];
 		// index 0 is background particle's size...
-		long[] particleSizes = pc.getParticleSizes(particleLabels);
+		long[] particleSizes = pc.getParticleSizes(particleLabels, nFgParticles);
 		removeSmallParticles(workArray, particleLabels, particleSizes, fg);
 
-		final int bg = ParticleCounter.BACK;
-		final Object[] backgroundParticles = pc.getParticles(imp, workArray, bg);
+		final int bg = ConnectedComponents.BACK;
+		final Object[] backgroundParticles = pc.getParticles(connector, imp, workArray, bg);
 		particleLabels = (int[][]) backgroundParticles[1];
-		particleSizes = pc.getParticleSizes(particleLabels);
+		final int nBgParticles = connector.getNParticles();
+		particleSizes = pc.getParticleSizes(particleLabels, nBgParticles);
 		touchEdges(imp, workArray, particleLabels, particleSizes);
-		particleSizes = pc.getParticleSizes(particleLabels);
+		particleSizes = pc.getParticleSizes(particleLabels, nBgParticles);
 		removeSmallParticles(workArray, particleLabels, particleSizes, bg);
 
 		final ImageStack stack = new ImageStack(imp.getWidth(), imp.getHeight());
