@@ -494,12 +494,14 @@ public class ParticleCounter implements PlugIn, DialogListener {
 		final int[][] particleLabels = connector.firstIDAttribution(imp, workArray, phase);
 
 		final int nParticles = connector.getNParticles();
-		
-		filterParticles(imp, workArray, particleLabels, minVol, maxVol, phase, nParticles);
-		
-		if (doExclude) excludeOnEdges(imp, particleLabels, workArray, nParticles);
 
-		final long[] particleSizes = getParticleSizes(particleLabels, connector.getNParticles());
+		final long[] particleSizes = getParticleSizes(particleLabels, nParticles);
+		
+		//optionally remove too big, too small, and edge-touching particles
+		ParticleAnalysis pa = new ParticleAnalysis();
+		pa.filterParticles(imp, particleLabels, workArray, particleSizes,
+				phase, doExclude, minVol, maxVol);
+
 		return new Object[] { workArray, particleLabels, particleSizes };
 	}
 	
@@ -1071,109 +1073,109 @@ public class ParticleCounter implements PlugIn, DialogListener {
 		return limits;
 	}
 	
-	/**
-	 * Scans edge voxels and set all touching particles to background
-	 *
-	 * @param imp an image.
-	 * @param particleLabels particles in the image.
-	 */
-	private void excludeOnEdges(final ImagePlus imp, final int[][] particleLabels,
-		final byte[][] workArray, final int nParticles)
-	{
-		final int w = imp.getWidth();
-		final int h = imp.getHeight();
-		final int d = imp.getImageStackSize();
-		final long[] particleSizes = getParticleSizes(particleLabels, nParticles);
-		final int nLabels = particleSizes.length;
-		final int[] newLabel = new int[nLabels];
-		for (int i = 0; i < nLabels; i++)
-			newLabel[i] = i;
-
-		// scan faces
-		// top and bottom faces
-		for (int y = 0; y < h; y++) {
-			final int index = y * w;
-			for (int x = 0; x < w; x++) {
-				final int pt = particleLabels[0][index + x];
-				if (pt > 0) newLabel[pt] = 0;
-				final int pb = particleLabels[d - 1][index + x];
-				if (pb > 0) newLabel[pb] = 0;
-			}
-		}
-
-		// west and east faces
-		for (int z = 0; z < d; z++) {
-			for (int y = 0; y < h; y++) {
-				final int pw = particleLabels[z][y * w];
-				final int pe = particleLabels[z][y * w + w - 1];
-				if (pw > 0) newLabel[pw] = 0;
-				if (pe > 0) newLabel[pe] = 0;
-			}
-		}
-
-		// north and south faces
-		final int lastRow = w * (h - 1);
-		for (int z = 0; z < d; z++) {
-			for (int x = 0; x < w; x++) {
-				final int pn = particleLabels[z][x];
-				final int ps = particleLabels[z][lastRow + x];
-				if (pn > 0) newLabel[pn] = 0;
-				if (ps > 0) newLabel[ps] = 0;
-			}
-		}
-
-		// replace labels
-		final int wh = w * h;
-		for (int z = 0; z < d; z++) {
-			for (int i = 0; i < wh; i++) {
-				final int p = particleLabels[z][i];
-				final int nL = newLabel[p];
-				if (nL == 0) {
-					particleLabels[z][i] = 0;
-					workArray[z][i] = 0;
-				}
-			}
-		}
-
-	}
-
-	/**
-	 * Remove particles outside user-specified volume thresholds
-	 *
-	 * @param imp ImagePlus, used for calibration
-	 * @param workArray binary foreground and background information
-	 * @param particleLabels Packed 3D array of particle labels
-	 * @param minVol minimum (inclusive) particle volume
-	 * @param maxVol maximum (inclusive) particle volume
-	 * @param phase phase we are interested in
-	 */
-	private void filterParticles(final ImagePlus imp, final byte[][] workArray,
-		final int[][] particleLabels, final double minVol, final double maxVol,
-		final int phase, final int nParticles)
-	{
-		if (minVol == 0 && maxVol == Double.POSITIVE_INFINITY) return;
-		final int d = imp.getImageStackSize();
-		final int wh = workArray[0].length;
-		final long[] particleSizes = getParticleSizes(particleLabels, nParticles);
-		final double[] particleVolumes = getVolumes(imp, particleSizes);
-		final byte flip;
-		if (phase == ConnectedComponents.FORE) {
-			flip = 0;
-		}
-		else {
-			flip = (byte) 255;
-		}
-		for (int z = 0; z < d; z++) {
-			for (int i = 0; i < wh; i++) {
-				final int p = particleLabels[z][i];
-				final double v = particleVolumes[p];
-				if (v < minVol || v > maxVol) {
-					workArray[z][i] = flip;
-					particleLabels[z][i] = 0;
-				}
-			}
-		}
-	}
+//	/**
+//	 * Scans edge voxels and set all touching particles to background
+//	 *
+//	 * @param imp an image.
+//	 * @param particleLabels particles in the image.
+//	 */
+//	private void excludeOnEdges(final ImagePlus imp, final int[][] particleLabels,
+//		final byte[][] workArray, final int nParticles)
+//	{
+//		final int w = imp.getWidth();
+//		final int h = imp.getHeight();
+//		final int d = imp.getImageStackSize();
+//		final long[] particleSizes = getParticleSizes(particleLabels, nParticles);
+//		final int nLabels = particleSizes.length;
+//		final int[] newLabel = new int[nLabels];
+//		for (int i = 0; i < nLabels; i++)
+//			newLabel[i] = i;
+//
+//		// scan faces
+//		// top and bottom faces
+//		for (int y = 0; y < h; y++) {
+//			final int index = y * w;
+//			for (int x = 0; x < w; x++) {
+//				final int pt = particleLabels[0][index + x];
+//				if (pt > 0) newLabel[pt] = 0;
+//				final int pb = particleLabels[d - 1][index + x];
+//				if (pb > 0) newLabel[pb] = 0;
+//			}
+//		}
+//
+//		// west and east faces
+//		for (int z = 0; z < d; z++) {
+//			for (int y = 0; y < h; y++) {
+//				final int pw = particleLabels[z][y * w];
+//				final int pe = particleLabels[z][y * w + w - 1];
+//				if (pw > 0) newLabel[pw] = 0;
+//				if (pe > 0) newLabel[pe] = 0;
+//			}
+//		}
+//
+//		// north and south faces
+//		final int lastRow = w * (h - 1);
+//		for (int z = 0; z < d; z++) {
+//			for (int x = 0; x < w; x++) {
+//				final int pn = particleLabels[z][x];
+//				final int ps = particleLabels[z][lastRow + x];
+//				if (pn > 0) newLabel[pn] = 0;
+//				if (ps > 0) newLabel[ps] = 0;
+//			}
+//		}
+//
+//		// replace labels
+//		final int wh = w * h;
+//		for (int z = 0; z < d; z++) {
+//			for (int i = 0; i < wh; i++) {
+//				final int p = particleLabels[z][i];
+//				final int nL = newLabel[p];
+//				if (nL == 0) {
+//					particleLabels[z][i] = 0;
+//					workArray[z][i] = 0;
+//				}
+//			}
+//		}
+//
+//	}
+//
+//	/**
+//	 * Remove particles outside user-specified volume thresholds
+//	 *
+//	 * @param imp ImagePlus, used for calibration
+//	 * @param workArray binary foreground and background information
+//	 * @param particleLabels Packed 3D array of particle labels
+//	 * @param minVol minimum (inclusive) particle volume
+//	 * @param maxVol maximum (inclusive) particle volume
+//	 * @param phase phase we are interested in
+//	 */
+//	private void filterParticles(final ImagePlus imp, final byte[][] workArray,
+//		final int[][] particleLabels, final double minVol, final double maxVol,
+//		final int phase, final int nParticles)
+//	{
+//		if (minVol == 0 && maxVol == Double.POSITIVE_INFINITY) return;
+//		final int d = imp.getImageStackSize();
+//		final int wh = workArray[0].length;
+//		final long[] particleSizes = getParticleSizes(particleLabels, nParticles);
+//		final double[] particleVolumes = getVolumes(imp, particleSizes);
+//		final byte flip;
+//		if (phase == ConnectedComponents.FORE) {
+//			flip = 0;
+//		}
+//		else {
+//			flip = (byte) 255;
+//		}
+//		for (int z = 0; z < d; z++) {
+//			for (int i = 0; i < wh; i++) {
+//				final int p = particleLabels[z][i];
+//				final double v = particleVolumes[p];
+//				if (v < minVol || v > maxVol) {
+//					workArray[z][i] = flip;
+//					particleLabels[z][i] = 0;
+//				}
+//			}
+//		}
+//	}
 //TODO------------DISPLAY---------REMOVE-TO-OWN-CLASS-------------------------
 	
 	/**
