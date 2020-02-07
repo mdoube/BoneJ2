@@ -96,7 +96,7 @@ public class ConnectedComponents {
 
 	private static int[][] generateLut(ArrayList<ArrayList<HashSet<Integer>>> chunkMaps, int[] chunkIDOffsets) {
 		// snowball the HashSets, handling the chunk offsets and indexes
-		snowball(chunkMaps, chunkIDOffsets);
+		bucketFountain(chunkMaps, chunkIDOffsets);
 
 		HashMap<Integer, Integer> lutMap = makeLutMap(chunkMaps);
 
@@ -358,7 +358,7 @@ public class ConnectedComponents {
 	 * @param chunkIDOffsets
 	 * @param nChunks
 	 */
-	private static void snowball(final ArrayList<ArrayList<HashSet<Integer>>> chunkMaps, final int[] chunkIDOffsets) {
+	private static void bucketFountain(final ArrayList<ArrayList<HashSet<Integer>>> chunkMaps, final int[] chunkIDOffsets) {
 		// iterate backwards through the chunk maps
 
 		final int nChunks = chunkIDOffsets.length;
