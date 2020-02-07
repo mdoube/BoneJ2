@@ -10,6 +10,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.bonej.util.Multithreader;
 
+import ij.IJ;
 import ij.ImagePlus;
 import ij.ImageStack;
 import ij.process.ImageProcessor;
@@ -362,39 +363,33 @@ public class ConnectedComponents {
 
 		final int nChunks = chunkIDOffsets.length;
 
-		boolean somethingChanged = true;
-		while (somethingChanged) {
-			somethingChanged = false;
-			for (int chunk = nChunks - 1; chunk >= 0; chunk--) {
-				final ArrayList<HashSet<Integer>> map = chunkMaps.get(chunk);
-				final int priorChunk = chunk > 0 ? chunk - 1 : 0;
-				final ArrayList<HashSet<Integer>> priorMap = chunkMaps.get(priorChunk);
-				final int IDoffset = chunkIDOffsets[chunk];
-				final int priorIDoffset = chunkIDOffsets[priorChunk];
-				for (int i = map.size() - 1; i >= 0; i--) {
-					final HashSet<Integer> set = map.get(i);
-					if (!set.isEmpty()) {
-						// find the minimum label in the set
-						int minLabel = Integer.MAX_VALUE;
-						for (Integer label : set) {
-							if (label < minLabel)
-								minLabel = label;
-						}
-						// if minimum label is less than this chunk's offset, need
-						// to move set to previous chunk's map
-						if (minLabel < IDoffset) {
-							priorMap.get(minLabel - priorIDoffset).addAll(set);
-							set.clear();
-							somethingChanged = true;
-							continue;
-						}
-						// move whole set's contents to a lower position in the map
-						if (minLabel < i + IDoffset) {
-							map.get(minLabel - IDoffset).addAll(set);
-							set.clear();
-							somethingChanged = true;
-							continue;
-						}
+		for (int chunk = nChunks - 1; chunk >= 0; chunk--) {
+			final ArrayList<HashSet<Integer>> map = chunkMaps.get(chunk);
+			final int priorChunk = chunk > 0 ? chunk - 1 : 0;
+			final ArrayList<HashSet<Integer>> priorMap = chunkMaps.get(priorChunk);
+			final int IDoffset = chunkIDOffsets[chunk];
+			final int priorIDoffset = chunkIDOffsets[priorChunk];
+			for (int i = map.size() - 1; i >= 0; i--) {
+				final HashSet<Integer> set = map.get(i);
+				if (!set.isEmpty()) {
+					// find the minimum label in the set
+					int minLabel = Integer.MAX_VALUE;
+					for (Integer label : set) {
+						if (label < minLabel)
+							minLabel = label;
+					}
+					// if minimum label is less than this chunk's offset, need
+					// to move set to previous chunk's map
+					if (minLabel < IDoffset) {
+						priorMap.get(minLabel - priorIDoffset).addAll(set);
+						set.clear();
+						continue;
+					}
+					// move whole set's contents to a lower position in the map
+					if (minLabel < i + IDoffset) {
+						map.get(minLabel - IDoffset).addAll(set);
+						set.clear();
+						continue;
 					}
 				}
 			}
@@ -444,6 +439,7 @@ public class ConnectedComponents {
 		// check the hashMap for duplicate appearances and merge sets downwards
 		boolean somethingChanged = true;
 		while (somethingChanged) {
+			IJ.log("checking hashMap");
 			somethingChanged = false;
 			Iterator<Map.Entry<Integer, HashSet<Integer>>> it = hashMap.entrySet().iterator();
 			while (it.hasNext()) {
