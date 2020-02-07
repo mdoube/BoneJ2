@@ -464,6 +464,7 @@ public class ConnectedComponents {
 					if (lutValue > key) {
 						lutMap.put(label, key);
 						somethingChanged = true;
+						continue;
 					}
 					// looks like there is a value in the wrong place
 					if (lutValue < key) {
