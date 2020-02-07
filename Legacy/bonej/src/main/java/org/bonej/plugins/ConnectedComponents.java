@@ -353,10 +353,19 @@ public class ConnectedComponents {
 	}
 
 	/**
+	 * Empty each HashSet into a lower-indexed HashSet, based on the lowest label
+	 * found in the HashSet and the HashSets' indices. Resolve inter-chunk label
+	 * collisions. Transitively connected labels are joined when they are added to the same, 
+	 * lower-indexed, HashSet.
+	 * <br/>
+	 * By iterating downwards from the highest index, this algorithm resembles buckets
+	 * splashing water from the uppermost to the lowermost.
+	 * It is named after <i>Bucket Fountain</i>, a kinetic sculpture by Burren and Keen (1969),
+	 * installed in Cuba Mall, Wellington, New Zealand.
 	 * 
+	 * @see <a href="https://en.wikipedia.org/wiki/Bucket_Fountain">Wikipedia: Bucket Fountain</a>
 	 * @param chunkMaps
 	 * @param chunkIDOffsets
-	 * @param nChunks
 	 */
 	private static void bucketFountain(final ArrayList<ArrayList<HashSet<Integer>>> chunkMaps, final int[] chunkIDOffsets) {
 		// iterate backwards through the chunk maps
@@ -397,9 +406,12 @@ public class ConnectedComponents {
 	}
 
 	/**
+	 * Check the labels within HashSets for consistency and merge them if needed.
+	 * Generate a label replacement LUT based on the index of the HashSet each label is
+	 * found within.
 	 * 
 	 * @param chunkMaps
-	 * @return
+	 * @return lutMap
 	 */
 	private static HashMap<Integer, Integer> makeLutMap(final ArrayList<ArrayList<HashSet<Integer>>> chunkMaps) {
 		// count unique labels and particles
@@ -472,11 +484,12 @@ public class ConnectedComponents {
 	}
 
 	/**
+	 * Translate the LUT coded as a HashMap into a primitive array for rapid pixel relabelling
 	 * 
 	 * @param lutMap
 	 * @param chunkMaps
 	 * @param chunkIDOffsets
-	 * @return
+	 * @return LUT as a 2D int array, with an int[] array per chunk
 	 */
 	private static int[][] lutFromLutMap(final HashMap<Integer, Integer> lutMap,
 			final ArrayList<ArrayList<HashSet<Integer>>> chunkMaps, final int[] chunkIDOffsets) {
