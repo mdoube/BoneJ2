@@ -33,7 +33,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.bonej.util.Multithreader;
 
-import ij.IJ;
 import ij.ImagePlus;
 import ij.ImageStack;
 import ij.process.ImageProcessor;
@@ -474,7 +473,6 @@ public class ConnectedComponents {
 		// check the hashMap for duplicate appearances and merge sets downwards
 		boolean somethingChanged = true;
 		while (somethingChanged) {
-			IJ.log("checking hashMap");
 			somethingChanged = false;
 			Iterator<Map.Entry<Integer, HashSet<Integer>>> it = hashMap.entrySet().iterator();
 			while (it.hasNext()) {
