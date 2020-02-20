@@ -40,9 +40,9 @@ import ij.process.ImageProcessor;
 public class ConnectedComponents {
 
 	/** Foreground value */
-	static final int FORE = -1;
+	public static final int FORE = -1;
 	/** Background value */
-	static final int BACK = 0;
+	public static final int BACK = 0;
 	/** 2^23 - greatest integer that can be represented precisely by a float */
 	static final int MAX_LABEL = 8388608;
 
@@ -59,12 +59,12 @@ public class ConnectedComponents {
 	 * Run connected components filter on a binary image
 	 * 
 	 * @param imp   Input ImagePlus, must be 2D or 3D and binary (0 & 255)
-	 * @param phase either foreground or background
+	 * @param phase either foreground (this.FORE) or background (this.BACK)
 	 * @return 2D int array with the same dimensions as the input image, with
 	 *         individual connected components labelled with a unique, consecutive
 	 *         label.
 	 */
-	int[][] run(final ImagePlus imp, final int phase) {
+	public int[][] run(final ImagePlus imp, final int phase) {
 		final int w = imp.getWidth();
 		final int h = imp.getHeight();
 		final int nSlices = imp.getImageStackSize();
