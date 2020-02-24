@@ -178,6 +178,7 @@ public class ConnectedComponents {
 			final int chunk = thread;
 			// the starting ID for each chunk is the offset
 			final int IDoffset = chunkIDOffsets[chunk];
+			final int nextIDOffset = chunk < (chunkIDOffsets.length - 1) ? chunkIDOffsets[chunk + 1] : MAX_LABEL;
 			threads[chunk] = new Thread(() -> {
 				// get the Array of HashSets that relate to this image chunk
 				final ArrayList<HashSet<Integer>> chunkMap = chunkMaps.get(chunk);
@@ -219,7 +220,7 @@ public class ConnectedComponents {
 								// increment the particle label
 								if (minTag == ID) {
 									ID++;
-									expandMap(chunkMap, ID, IDoffset);
+									expandMap(chunkMap, ID, IDoffset, nextIDOffset);
 								}
 							}
 						}
@@ -249,7 +250,7 @@ public class ConnectedComponents {
 									// increment the particle label
 									if (minTag == ID) {
 										ID++;
-										expandMap(chunkMap, ID, IDoffset);
+										expandMap(chunkMap, ID, IDoffset, nextIDOffset);
 									}
 								}
 							}
@@ -281,7 +282,7 @@ public class ConnectedComponents {
 								// increment the particle label
 								if (minTag == ID) {
 									ID++;
-									expandMap(chunkMap, ID, IDoffset);
+									expandMap(chunkMap, ID, IDoffset, nextIDOffset);
 								}
 							}
 						}
@@ -310,7 +311,7 @@ public class ConnectedComponents {
 									// increment the particle label
 									if (minTag == ID) {
 										ID++;
-										expandMap(chunkMap, ID, IDoffset);
+										expandMap(chunkMap, ID, IDoffset, nextIDOffset);
 									}
 								}
 							}
@@ -835,7 +836,11 @@ public class ConnectedComponents {
 	 * @param ID
 	 * @param IDoffset
 	 */
-	private static void expandMap(final List<HashSet<Integer>> map, final int ID, final int IDoffset) {
+	private static void expandMap(final List<HashSet<Integer>> map, final int ID,
+			final int IDoffset, final int nextIDOffset) {
+		if (ID >= nextIDOffset) {
+			throw new IllegalArgumentException("ID "+ID+" is greater than the allowed range (max "+(nextIDOffset-1)+")");
+		}
 		while (ID - IDoffset >= map.size()) {
 			final HashSet<Integer> set = new HashSet<>();
 			set.add(map.size() + IDoffset);
