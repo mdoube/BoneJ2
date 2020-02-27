@@ -58,10 +58,6 @@ import ij3d.Image3DUniverse;
  */
 public class ParticleCounter implements PlugIn, DialogListener {
 
-	/** String representation of current analysis phase for GUI display*/
-	private String sPhase = "";
-
-//TODO -- Run method & GUI (userland class)
 	
 	@Override
 	public boolean dialogItemChanged(final GenericDialog gd, final AWTEvent e) {
@@ -388,8 +384,6 @@ public class ParticleCounter implements PlugIn, DialogListener {
 		UsageReporter.reportEvent(this).send();
 	}
 	
-	//TODO--------Connected components labelling
-	
 	/**
 	 * Get particles, particle labels and particle sizes from a 3D ImagePlus
 	 *  
@@ -419,17 +413,7 @@ public class ParticleCounter implements PlugIn, DialogListener {
 	private Object[] getParticles(ConnectedComponents connector, 
 			final ImagePlus imp, final double minVol, final double maxVol,
 		final int phase, final boolean doExclude)
-	{
-		if (phase == ConnectedComponents.FORE) {
-			sPhase = "foreground";
-		}
-		else if (phase == ConnectedComponents.BACK) {
-			sPhase = "background";
-		}
-		else {
-			throw new IllegalArgumentException();
-		}
-		
+	{		
 		//do the connected components
 		final int[][] particleLabels = connector.run(imp, phase);
 		
